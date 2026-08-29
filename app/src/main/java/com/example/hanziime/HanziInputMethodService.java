@@ -1,6 +1,8 @@
 package com.example.hanziime;
 
 import android.inputmethodservice.InputMethodService;
+import android.content.SharedPreferences;
+import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -29,12 +31,18 @@ public final class HanziInputMethodService extends InputMethodService
     private DigitalInkRecognitionModel handwritingModel;
     private DigitalInkRecognizer handwritingRecognizer;
     private boolean handwritingModelReady;
+    private SharedPreferences preferences;
+    private UserLexiconStore userLexicon;
+    private boolean privateInput;
+    private String previousCommitted = "";
 
     @Override
     public void onCreate() {
         super.onCreate();
         pinyinEngine = new PinyinEngine(this);
         assemblyEngine = new AssemblyEngine(this);
+        preferences = ImePreferences.get(this);
+        userLexicon = new UserLexiconStore(this);
         initializeHandwritingRecognizer();
     }
 
@@ -47,7 +55,9 @@ public final class HanziInputMethodService extends InputMethodService
 
     @Override
     public void onLetter(String text) {
-        if (mode == SimpleKeyboardView.InputMode.ENGLISH) {
+        if (mode == SimpleKeyboardView.InputMode.ENGLISH
+                || mode == SimpleKeyboardView.InputMode.NUMBER
+                || mode == SimpleKeyboardView.InputMode.SYMBOL) {
             commitDirect(text);
             return;
         }
@@ -147,19 +157,31 @@ public final class HanziInputMethodService extends InputMethodService
         super.onStartInput(attribute, restarting);
         composition.setLength(0);
         candidates = java.util.List.of();
+        previousCommitted = "";
+        privateInput = isPrivateInput(attribute == null ? 0 : attribute.inputType);
     }
 
     private void refreshCandidates() {
         if (mode == SimpleKeyboardView.InputMode.ASSEMBLY) {
             candidates = assemblyEngine.search(composition.toString());
         } else {
-            candidates = pinyinEngine.search(composition.toString(), true);
+            boolean fuzzy = ImePreferences.enabled(preferences, ImePreferences.FUZZY);
+            java.util.List<Candidate> merged = new ArrayList<>(
+                    pinyinEngine.search(composition.toString(), fuzzy));
+            if (!privateInput) merged.addAll(0, userLexicon.customFor(composition.toString()));
+            candidates = merged;
         }
+        if (learningAllowed()) candidates = userLexicon.rerank(candidates);
         if (keyboard != null) keyboard.showCandidates(composition.toString(), candidates);
     }
 
     private void commitCandidate(Candidate candidate) {
-        commitRaw(candidate.text());
+        if (learningAllowed()) userLexicon.record(candidate, previousCommitted);
+        commitDirect(candidate.text());
+        previousCommitted = candidate.text();
+        composition.setLength(0);
+        candidates = learningAllowed() ? userLexicon.nextAfter(previousCommitted) : java.util.List.of();
+        if (keyboard != null) keyboard.showCandidates("", candidates);
         if (candidate.source() == Candidate.Source.HANDWRITING && keyboard != null) {
             keyboard.clearHandwriting();
         }
@@ -167,9 +189,22 @@ public final class HanziInputMethodService extends InputMethodService
 
     private void commitRaw(String text) {
         commitDirect(text);
+        if (!text.isBlank()) previousCommitted = text;
         composition.setLength(0);
         candidates = java.util.List.of();
         if (keyboard != null) keyboard.showCandidates("", candidates);
+    }
+
+    private boolean learningAllowed() {
+        return !privateInput && ImePreferences.enabled(preferences, ImePreferences.LEARNING);
+    }
+
+    private static boolean isPrivateInput(int inputType) {
+        int variation = inputType & InputType.TYPE_MASK_VARIATION;
+        return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD
+                || variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                || variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD;
     }
 
     private void commitDirect(String text) {
