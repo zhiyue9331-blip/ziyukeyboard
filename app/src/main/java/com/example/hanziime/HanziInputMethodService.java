@@ -6,6 +6,18 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
+import com.google.mlkit.common.MlKitException;
+import com.google.mlkit.common.model.DownloadConditions;
+import com.google.mlkit.common.model.RemoteModelManager;
+import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognition;
+import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognitionModel;
+import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognitionModelIdentifier;
+import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizer;
+import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizerOptions;
+import com.google.mlkit.vision.digitalink.recognition.Ink;
+
+import java.util.ArrayList;
+
 public final class HanziInputMethodService extends InputMethodService
         implements SimpleKeyboardView.Listener {
     private final StringBuilder composition = new StringBuilder();
@@ -14,12 +26,16 @@ public final class HanziInputMethodService extends InputMethodService
     private SimpleKeyboardView keyboard;
     private java.util.List<Candidate> candidates = java.util.List.of();
     private SimpleKeyboardView.InputMode mode = SimpleKeyboardView.InputMode.PINYIN;
+    private DigitalInkRecognitionModel handwritingModel;
+    private DigitalInkRecognizer handwritingRecognizer;
+    private boolean handwritingModelReady;
 
     @Override
     public void onCreate() {
         super.onCreate();
         pinyinEngine = new PinyinEngine(this);
         assemblyEngine = new AssemblyEngine(this);
+        initializeHandwritingRecognizer();
     }
 
     @Override
@@ -46,6 +62,35 @@ public final class HanziInputMethodService extends InputMethodService
         }
         mode = newMode;
         if (keyboard != null) keyboard.setMode(newMode);
+        if (newMode == SimpleKeyboardView.InputMode.HANDWRITING) {
+            ensureHandwritingModel();
+        }
+    }
+
+    @Override
+    public void onRecognizeHandwriting(Ink ink) {
+        if (!handwritingModelReady || handwritingRecognizer == null) {
+            if (keyboard != null) keyboard.showHandwritingStatus("中文手写模型正在准备，请稍后");
+            ensureHandwritingModel();
+            return;
+        }
+        if (keyboard != null) keyboard.showHandwritingStatus("正在识别…");
+        handwritingRecognizer.recognize(ink)
+                .addOnSuccessListener(result -> {
+                    ListBuilder builder = new ListBuilder();
+                    result.getCandidates().stream().limit(12).forEach(item -> {
+                        String text = item.getText();
+                        builder.add(new Candidate(text, HanziPronunciation.of(text), 0,
+                                Candidate.Source.HANDWRITING));
+                    });
+                    candidates = builder.values;
+                    if (keyboard != null) {
+                        keyboard.showCandidates("手写候选", candidates);
+                    }
+                })
+                .addOnFailureListener(error -> {
+                    if (keyboard != null) keyboard.showHandwritingStatus("识别失败，请重试");
+                });
     }
 
     @Override
@@ -115,6 +160,9 @@ public final class HanziInputMethodService extends InputMethodService
 
     private void commitCandidate(Candidate candidate) {
         commitRaw(candidate.text());
+        if (candidate.source() == Candidate.Source.HANDWRITING && keyboard != null) {
+            keyboard.clearHandwriting();
+        }
     }
 
     private void commitRaw(String text) {
@@ -127,5 +175,56 @@ public final class HanziInputMethodService extends InputMethodService
     private void commitDirect(String text) {
         InputConnection connection = getCurrentInputConnection();
         if (connection != null) connection.commitText(text, 1);
+    }
+
+    private void initializeHandwritingRecognizer() {
+        try {
+            DigitalInkRecognitionModelIdentifier identifier =
+                    DigitalInkRecognitionModelIdentifier.fromLanguageTag("zh-Hans-CN");
+            if (identifier == null) return;
+            handwritingModel = DigitalInkRecognitionModel.builder(identifier).build();
+            handwritingRecognizer = DigitalInkRecognition.getClient(
+                    DigitalInkRecognizerOptions.builder(handwritingModel).build());
+        } catch (MlKitException ignored) {
+            handwritingModel = null;
+            handwritingRecognizer = null;
+        }
+    }
+
+    private void ensureHandwritingModel() {
+        if (handwritingModel == null || handwritingModelReady) return;
+        if (keyboard != null) keyboard.showHandwritingStatus("正在检查中文手写模型…");
+        RemoteModelManager manager = RemoteModelManager.getInstance();
+        manager.isModelDownloaded(handwritingModel)
+                .addOnSuccessListener(downloaded -> {
+                    if (downloaded) {
+                        handwritingModelReady = true;
+                        if (keyboard != null) keyboard.showHandwritingStatus("请在下方书写汉字");
+                    } else {
+                        if (keyboard != null) keyboard.showHandwritingStatus("首次使用：正在下载中文手写模型…");
+                        manager.download(handwritingModel, new DownloadConditions.Builder().build())
+                                .addOnSuccessListener(unused -> {
+                                    handwritingModelReady = true;
+                                    if (keyboard != null) keyboard.showHandwritingStatus("模型就绪，请书写汉字");
+                                })
+                                .addOnFailureListener(error -> {
+                                    if (keyboard != null) keyboard.showHandwritingStatus("模型下载失败，请检查网络");
+                                });
+                    }
+                })
+                .addOnFailureListener(error -> {
+                    if (keyboard != null) keyboard.showHandwritingStatus("无法检查手写模型");
+                });
+    }
+
+    @Override
+    public void onDestroy() {
+        if (handwritingRecognizer != null) handwritingRecognizer.close();
+        super.onDestroy();
+    }
+
+    private static final class ListBuilder {
+        private final java.util.List<Candidate> values = new ArrayList<>();
+        private void add(Candidate value) { values.add(value); }
     }
 }

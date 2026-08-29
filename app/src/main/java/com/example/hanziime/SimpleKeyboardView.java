@@ -4,10 +4,13 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+
+import com.google.mlkit.vision.digitalink.recognition.Ink;
 
 public final class SimpleKeyboardView extends LinearLayout {
     public enum InputMode { PINYIN, ASSEMBLY, HANDWRITING, ENGLISH, NUMBER, SYMBOL }
@@ -19,12 +22,16 @@ public final class SimpleKeyboardView extends LinearLayout {
         void onDelete();
         void onEnter();
         void onModeSelected(InputMode mode);
+        void onRecognizeHandwriting(Ink ink);
     }
 
     private static final String[] ROWS = {"qwertyuiop", "asdfghjkl", "zxcvbnm"};
     private Listener listener;
     private final TextView compositionView;
     private final LinearLayout candidateRow;
+    private final LinearLayout keyboardArea;
+    private final LinearLayout handwritingArea;
+    private final HandwritingPad handwritingPad;
     private InputMode mode = InputMode.PINYIN;
 
     public SimpleKeyboardView(Context context) {
@@ -34,6 +41,9 @@ public final class SimpleKeyboardView extends LinearLayout {
         setBackgroundColor(Color.rgb(220, 226, 230));
         compositionView = new TextView(context);
         candidateRow = new LinearLayout(context);
+        keyboardArea = new LinearLayout(context);
+        handwritingArea = new LinearLayout(context);
+        handwritingPad = new HandwritingPad(context);
         buildKeyboard();
     }
 
@@ -64,6 +74,9 @@ public final class SimpleKeyboardView extends LinearLayout {
                 LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
         addView(scroller, new LayoutParams(LayoutParams.MATCH_PARENT, dp(54)));
 
+        keyboardArea.setOrientation(VERTICAL);
+        handwritingArea.setOrientation(VERTICAL);
+
         for (String keys : ROWS) {
             LinearLayout row = createRow();
             for (int i = 0; i < keys.length(); i++) {
@@ -74,7 +87,7 @@ public final class SimpleKeyboardView extends LinearLayout {
                 });
                 row.addView(key, weightedKey());
             }
-            addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, dp(48)));
+            keyboardArea.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, dp(48)));
         }
 
         LinearLayout actions = createRow();
@@ -95,7 +108,32 @@ public final class SimpleKeyboardView extends LinearLayout {
             if (listener != null) listener.onEnter();
         });
         actions.addView(enter, weightedKey(1.2f));
-        addView(actions, new LayoutParams(LayoutParams.MATCH_PARENT, dp(50)));
+        keyboardArea.addView(actions, new LayoutParams(LayoutParams.MATCH_PARENT, dp(50)));
+        addView(keyboardArea, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
+
+        handwritingArea.addView(handwritingPad,
+                new LayoutParams(LayoutParams.MATCH_PARENT, dp(150)));
+        LinearLayout inkActions = createRow();
+        Button clear = createKey("清空");
+        clear.setOnClickListener(view -> handwritingPad.clear());
+        inkActions.addView(clear, weightedKey());
+        Button recognize = createKey("识别");
+        recognize.setOnClickListener(view -> {
+            if (listener != null && !handwritingPad.isEmpty()) {
+                listener.onRecognizeHandwriting(handwritingPad.getInk());
+            }
+        });
+        inkActions.addView(recognize, weightedKey(2f));
+        Button inkDelete = createKey("删除");
+        inkDelete.setOnClickListener(view -> {
+            if (listener != null) listener.onDelete();
+        });
+        inkActions.addView(inkDelete, weightedKey());
+        handwritingArea.addView(inkActions,
+                new LayoutParams(LayoutParams.MATCH_PARENT, dp(50)));
+        handwritingArea.setVisibility(View.GONE);
+        addView(handwritingArea,
+                new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
     }
 
     public void showCandidates(String composition, java.util.List<Candidate> candidates) {
@@ -119,7 +157,18 @@ public final class SimpleKeyboardView extends LinearLayout {
 
     public void setMode(InputMode mode) {
         this.mode = mode;
+        boolean handwriting = mode == InputMode.HANDWRITING;
+        keyboardArea.setVisibility(handwriting ? View.GONE : View.VISIBLE);
+        handwritingArea.setVisibility(handwriting ? View.VISIBLE : View.GONE);
         showCandidates("", java.util.List.of());
+    }
+
+    public void clearHandwriting() {
+        handwritingPad.clear();
+    }
+
+    public void showHandwritingStatus(String status) {
+        compositionView.setText(status);
     }
 
     private void addModeButton(LinearLayout toolbar, String label, InputMode targetMode) {
