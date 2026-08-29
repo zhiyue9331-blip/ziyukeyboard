@@ -10,13 +10,16 @@ public final class HanziInputMethodService extends InputMethodService
         implements SimpleKeyboardView.Listener {
     private final StringBuilder composition = new StringBuilder();
     private PinyinEngine pinyinEngine;
+    private AssemblyEngine assemblyEngine;
     private SimpleKeyboardView keyboard;
     private java.util.List<Candidate> candidates = java.util.List.of();
+    private SimpleKeyboardView.InputMode mode = SimpleKeyboardView.InputMode.PINYIN;
 
     @Override
     public void onCreate() {
         super.onCreate();
         pinyinEngine = new PinyinEngine(this);
+        assemblyEngine = new AssemblyEngine(this);
     }
 
     @Override
@@ -28,8 +31,21 @@ public final class HanziInputMethodService extends InputMethodService
 
     @Override
     public void onLetter(String text) {
+        if (mode == SimpleKeyboardView.InputMode.ENGLISH) {
+            commitDirect(text);
+            return;
+        }
         composition.append(text);
         refreshCandidates();
+    }
+
+    @Override
+    public void onModeSelected(SimpleKeyboardView.InputMode newMode) {
+        if (!composition.isEmpty()) {
+            commitRaw(composition.toString());
+        }
+        mode = newMode;
+        if (keyboard != null) keyboard.setMode(newMode);
     }
 
     @Override
@@ -89,7 +105,11 @@ public final class HanziInputMethodService extends InputMethodService
     }
 
     private void refreshCandidates() {
-        candidates = pinyinEngine.search(composition.toString(), true);
+        if (mode == SimpleKeyboardView.InputMode.ASSEMBLY) {
+            candidates = assemblyEngine.search(composition.toString());
+        } else {
+            candidates = pinyinEngine.search(composition.toString(), true);
+        }
         if (keyboard != null) keyboard.showCandidates(composition.toString(), candidates);
     }
 
@@ -98,10 +118,14 @@ public final class HanziInputMethodService extends InputMethodService
     }
 
     private void commitRaw(String text) {
-        InputConnection connection = getCurrentInputConnection();
-        if (connection != null) connection.commitText(text, 1);
+        commitDirect(text);
         composition.setLength(0);
         candidates = java.util.List.of();
         if (keyboard != null) keyboard.showCandidates("", candidates);
+    }
+
+    private void commitDirect(String text) {
+        InputConnection connection = getCurrentInputConnection();
+        if (connection != null) connection.commitText(text, 1);
     }
 }

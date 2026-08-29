@@ -10,18 +10,22 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 public final class SimpleKeyboardView extends LinearLayout {
+    public enum InputMode { PINYIN, ASSEMBLY, HANDWRITING, ENGLISH, NUMBER, SYMBOL }
+
     public interface Listener {
         void onLetter(String text);
         void onCandidate(Candidate candidate);
         void onSpace();
         void onDelete();
         void onEnter();
+        void onModeSelected(InputMode mode);
     }
 
     private static final String[] ROWS = {"qwertyuiop", "asdfghjkl", "zxcvbnm"};
     private Listener listener;
     private final TextView compositionView;
     private final LinearLayout candidateRow;
+    private InputMode mode = InputMode.PINYIN;
 
     public SimpleKeyboardView(Context context) {
         super(context);
@@ -38,6 +42,14 @@ public final class SimpleKeyboardView extends LinearLayout {
     }
 
     private void buildKeyboard() {
+        LinearLayout toolbar = createRow();
+        addModeButton(toolbar, "拼音", InputMode.PINYIN);
+        addModeButton(toolbar, "拼字", InputMode.ASSEMBLY);
+        addModeButton(toolbar, "手写", InputMode.HANDWRITING);
+        addModeButton(toolbar, "英文", InputMode.ENGLISH);
+        addModeButton(toolbar, "123", InputMode.NUMBER);
+        addView(toolbar, new LayoutParams(LayoutParams.MATCH_PARENT, dp(38)));
+
         compositionView.setText("中文 · 26键");
         compositionView.setTextColor(Color.rgb(45, 58, 68));
         compositionView.setTextSize(15);
@@ -90,7 +102,8 @@ public final class SimpleKeyboardView extends LinearLayout {
         compositionView.setText(composition.isEmpty() ? "中文 · 26键" : composition);
         candidateRow.removeAllViews();
         for (Candidate candidate : candidates) {
-            Button button = createKey(candidate.text() + "  " + candidate.pinyin());
+            String detail = candidate.annotation().isEmpty() ? "" : " 〔" + candidate.annotation() + "〕";
+            Button button = createKey(candidate.text() + "  " + candidate.pinyin() + detail);
             button.setTextSize(14);
             button.setSingleLine(true);
             button.setOnClickListener(view -> {
@@ -102,6 +115,21 @@ public final class SimpleKeyboardView extends LinearLayout {
             button.setMinWidth(dp(76));
             candidateRow.addView(button, params);
         }
+    }
+
+    public void setMode(InputMode mode) {
+        this.mode = mode;
+        showCandidates("", java.util.List.of());
+    }
+
+    private void addModeButton(LinearLayout toolbar, String label, InputMode targetMode) {
+        Button button = createKey(label);
+        button.setTextSize(13);
+        button.setOnClickListener(view -> {
+            mode = targetMode;
+            if (listener != null) listener.onModeSelected(targetMode);
+        });
+        toolbar.addView(button, weightedKey());
     }
 
     private LinearLayout createRow() {
