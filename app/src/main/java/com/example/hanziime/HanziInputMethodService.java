@@ -67,7 +67,7 @@ public final class HanziInputMethodService extends InputMethodService
 
     @Override
     public void onModeSelected(SimpleKeyboardView.InputMode newMode) {
-        if (!composition.isEmpty()) {
+        if (composition.length() > 0) {
             commitRaw(composition.toString());
         }
         mode = newMode;
@@ -88,11 +88,13 @@ public final class HanziInputMethodService extends InputMethodService
         handwritingRecognizer.recognize(ink)
                 .addOnSuccessListener(result -> {
                     ListBuilder builder = new ListBuilder();
-                    result.getCandidates().stream().limit(12).forEach(item -> {
+                    int count = Math.min(12, result.getCandidates().size());
+                    for (int i = 0; i < count; i++) {
+                        var item = result.getCandidates().get(i);
                         String text = item.getText();
                         builder.add(new Candidate(text, HanziPronunciation.of(text), 0,
                                 Candidate.Source.HANDWRITING));
-                    });
+                    }
                     candidates = builder.values;
                     if (keyboard != null) {
                         keyboard.showCandidates("手写候选", candidates);
@@ -119,7 +121,7 @@ public final class HanziInputMethodService extends InputMethodService
 
     @Override
     public void onDelete() {
-        if (!composition.isEmpty()) {
+        if (composition.length() > 0) {
             composition.deleteCharAt(composition.length() - 1);
             refreshCandidates();
             return;
@@ -132,7 +134,7 @@ public final class HanziInputMethodService extends InputMethodService
 
     @Override
     public void onEnter() {
-        if (!composition.isEmpty()) {
+        if (composition.length() > 0) {
             if (!candidates.isEmpty()) commitCandidate(candidates.get(0));
             else commitRaw(composition.toString());
             return;

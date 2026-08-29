@@ -4,7 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -22,9 +22,8 @@ public final class UserLexiconStore {
 
     public List<Candidate> rerank(List<Candidate> candidates) {
         List<Candidate> sorted = new ArrayList<>(candidates);
-        sorted.sort(Comparator.<Candidate>comparingInt(candidate ->
-                        candidate.score() + data.getInt(FREQUENCY + candidate.text(), 0) * 250)
-                .reversed());
+        Collections.sort(sorted, (left, right) -> Integer.compare(
+                learnedScore(right), learnedScore(left)));
         return sorted;
     }
 
@@ -52,8 +51,9 @@ public final class UserLexiconStore {
             String pinyin = data.getString(PRONUNCIATION + text, HanziPronunciation.of(text));
             result.add(new Candidate(text, pinyin, count * 100, Candidate.Source.USER, "常用表达"));
         }
-        result.sort(Comparator.comparingInt(Candidate::score).reversed());
-        return result.stream().limit(8).toList();
+        Collections.sort(result, (left, right) -> Integer.compare(right.score(), left.score()));
+        if (result.size() > 8) return new ArrayList<>(result.subList(0, 8));
+        return result;
     }
 
     public List<Candidate> customFor(String rawPinyin) {
@@ -79,5 +79,9 @@ public final class UserLexiconStore {
 
     public void clearLearning() {
         data.edit().clear().apply();
+    }
+
+    private int learnedScore(Candidate candidate) {
+        return candidate.score() + data.getInt(FREQUENCY + candidate.text(), 0) * 250;
     }
 }

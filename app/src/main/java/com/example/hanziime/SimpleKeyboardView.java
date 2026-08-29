@@ -235,6 +235,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         return switch (preferences.getString(ImePreferences.THEME, "paper")) {
             case "jade" -> Color.rgb(218, 241, 235);
             case "night" -> Color.rgb(184, 198, 209);
+            case "custom" -> safeColor(ImePreferences.CUSTOM_KEY_COLOR, "#FFFFFF");
             default -> Color.WHITE;
         };
     }
@@ -243,8 +244,17 @@ public final class SimpleKeyboardView extends LinearLayout {
         return switch (preferences.getString(ImePreferences.THEME, "paper")) {
             case "jade" -> Color.rgb(176, 211, 202);
             case "night" -> Color.rgb(50, 63, 74);
+            case "custom" -> safeColor(ImePreferences.CUSTOM_PANEL_COLOR, "#DCE2E6");
             default -> Color.rgb(220, 226, 230);
         };
+    }
+
+    private int safeColor(String key, String fallback) {
+        try {
+            return Color.parseColor(preferences.getString(key, fallback));
+        } catch (IllegalArgumentException ignored) {
+            return Color.parseColor(fallback);
+        }
     }
 
     private LayoutParams weightedKey() {

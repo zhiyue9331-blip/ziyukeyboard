@@ -1,21 +1,69 @@
 # 字语输入法
 
-面向 Android 的中文输入法项目。目前完成第 1 阶段工程骨架：
+字语输入法是一个原生 Android 中文输入法 MVP，重点探索“部件读音拼字”和候选读音反馈。项目使用 Java 和 Android `InputMethodService`，最低支持 Android 6.0（API 23）。
 
-- Android 输入法服务注册
-- 系统启用与选择入口
-- 可工作的 26 键英文骨架键盘
-- 删除、空格、回车操作
-- Android 6.0（API 23）及以上支持
+## 已实现功能
 
-## 导入和运行
+- 26 键拼音输入、简拼和候选前缀匹配
+- 常见声母、模糊音及前后鼻音匹配
+- 拼字输入：`jiuri → 旮（gā，九+日）`、`wangyu/wangyv → 珏（jué，王+玉）`
+- 中文数字墨水手写识别，候选显示拼音，多音字显示多个读音
+- 拼音、拼字、手写、英文、数字和符号模式即时切换
+- 纸白、青玉、夜色皮肤，以及面板色/按键色自定义
+- 振动反馈和按键音开关
+- 本地词频、连续表达学习和自定义词条
+- 密码类输入框自动停止学习
+- 用户词库、设置和输入习惯不进行云备份
 
-1. 使用支持 Android Gradle Plugin 9.3 的 Android Studio 打开本目录。
-2. 安装 Android SDK 36，并使用 JDK 17。
-3. 等待 Gradle 同步后运行 `app`。
-4. 打开应用，依次点击“启用输入法”和“选择当前输入法”。
-5. 在任意文本框中测试键盘。
+## 构建环境
 
-## 后续阶段
+- JDK 17
+- Android SDK 36
+- Android Gradle Plugin 9.3.0
+- Gradle 9.5.0（Wrapper 已包含）
 
-下一步将实现拼音组合区、候选栏和基础拼音引擎，再逐步加入模糊音、拼字、手写、皮肤及本地词频学习。
+首次构建：
+
+```powershell
+.\gradlew.bat assembleDebug
+```
+
+APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。
+
+由于仓库目录名含中文，部分 Windows 版本的 Gradle 测试工作进程可能无法解析测试类路径。可临时映射 ASCII 盘符：
+
+```powershell
+subst R: "C:\Users\23170\Desktop\输入法"
+Set-Location R:\
+.\gradlew.bat testDebugUnitTest lintDebug assembleDebug
+subst R: /D
+```
+
+## 安装与启用
+
+1. 安装调试 APK，打开“字语输入法”。
+2. 点击“启用输入法”，在 Android 设置中允许字语输入法。
+3. 返回应用并点击“选择当前输入法”。
+4. 打开任意文本框开始输入。
+5. 第一次切换到手写模式时，需要联网下载约 20MB 的简体中文识别模型。
+
+## 数据与隐私
+
+- 拼音、拼字和基础词库查询均离线完成。
+- ML Kit 语言模型仅在首次使用手写时下载，书写轨迹在设备端识别。
+- 候选选择次数、连续表达和自定义词条保存在应用私有存储中。
+- 密码、可见密码、网页密码和数字密码输入框不会写入学习数据。
+- 应用禁止明文网络流量，并关闭系统云备份及设备迁移数据导出。
+- 设置页可暂停个性化学习或清空全部本地学习数据。
+
+## 词库扩展
+
+基础拼音词库位于 `app/src/main/assets/pinyin_dictionary.tsv`，拼字部件库位于 `app/src/main/assets/assembly_dictionary.tsv`。当前内置词库用于验证完整输入流程，正式发行前应替换为经过许可的大规模词库。
+
+## 验证
+
+项目包含 8 个 JVM 单元测试，覆盖全拼、简拼、模糊音、拼字示例以及手写候选拼音。最终检查命令：
+
+```powershell
+.\gradlew.bat testDebugUnitTest lintDebug assembleDebug
+```

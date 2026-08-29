@@ -33,10 +33,10 @@ public final class HanziPronunciation {
         for (int i = 0; i < text.length(); i++) {
             String pinyin = PINYIN.get(text.charAt(i));
             if (pinyin != null) {
-                if (!result.isEmpty()) result.append(' ');
+                if (result.length() > 0) result.append(' ');
                 result.append(pinyin);
             }
         }
-        return result.isEmpty() ? "读音待补充" : result.toString();
+        return result.length() == 0 ? "读音待补充" : result.toString();
     }
 }

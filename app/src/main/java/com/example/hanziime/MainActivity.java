@@ -95,6 +95,39 @@ public final class MainActivity extends Activity {
         });
         root.addView(theme, matchWrap(dp(10)));
 
+        LinearLayout colorRow = new LinearLayout(this);
+        colorRow.setOrientation(LinearLayout.HORIZONTAL);
+        EditText panelColor = new EditText(this);
+        panelColor.setHint("面板色 #DCE2E6");
+        panelColor.setSingleLine(true);
+        colorRow.addView(panelColor, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        EditText keyColor = new EditText(this);
+        keyColor.setHint("按键色 #FFFFFF");
+        keyColor.setSingleLine(true);
+        colorRow.addView(keyColor, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        root.addView(colorRow, matchWrap(dp(4)));
+
+        Button applyCustomSkin = actionButton(0);
+        applyCustomSkin.setText("应用自定义颜色皮肤");
+        applyCustomSkin.setOnClickListener(view -> {
+            String panel = normalizeColor(panelColor.getText().toString(), "#DCE2E6");
+            String key = normalizeColor(keyColor.getText().toString(), "#FFFFFF");
+            if (panel == null || key == null) {
+                Toast.makeText(this, "颜色格式应为 #RRGGBB", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            ImePreferences.get(this).edit()
+                    .putString(ImePreferences.THEME, "custom")
+                    .putString(ImePreferences.CUSTOM_PANEL_COLOR, panel)
+                    .putString(ImePreferences.CUSTOM_KEY_COLOR, key)
+                    .apply();
+            updateThemeLabel(theme);
+            Toast.makeText(this, "自定义皮肤已保存，重新打开键盘后生效", Toast.LENGTH_SHORT).show();
+        });
+        root.addView(applyCustomSkin, matchWrap(dp(14)));
+
         TextView customTitle = new TextView(this);
         customTitle.setText("添加自定义词条");
         customTitle.setTextSize(17);
@@ -153,9 +186,21 @@ public final class MainActivity extends Activity {
         String name = switch (current) {
             case "jade" -> "青玉";
             case "night" -> "夜色";
+            case "custom" -> "自定义";
             default -> "纸白";
         };
         button.setText("输入法皮肤：" + name + "（点击切换）");
+    }
+
+    private String normalizeColor(String raw, String fallback) {
+        String value = raw.trim().isEmpty() ? fallback : raw.trim();
+        if (!value.startsWith("#")) value = "#" + value;
+        try {
+            Color.parseColor(value);
+            return value;
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private TextView bodyText(int textResource) {

@@ -58,6 +58,7 @@ public final class HandwritingPad extends View {
                     strokeBuilder.addPoint(Ink.Point.create(x, y, timestamp));
                     invalidate();
                 }
+                performClick();
                 return true;
             }
             case MotionEvent.ACTION_UP -> {
@@ -74,6 +75,12 @@ public final class HandwritingPad extends View {
             }
             default -> { return super.onTouchEvent(event); }
         }
+    }
+
+    @Override
+    public boolean performClick() {
+        super.performClick();
+        return true;
     }
 
     public Ink getInk() {

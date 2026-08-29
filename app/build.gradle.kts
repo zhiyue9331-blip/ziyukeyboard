@@ -32,4 +32,5 @@ android {
 
 dependencies {
     implementation("com.google.mlkit:digital-ink-recognition:19.0.0")
+    testImplementation("junit:junit:4.13.2")
 }

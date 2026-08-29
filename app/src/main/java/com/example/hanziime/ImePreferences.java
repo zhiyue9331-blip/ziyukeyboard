@@ -10,6 +10,8 @@ public final class ImePreferences {
     public static final String VIBRATION = "key_vibration";
     public static final String SOUND = "key_sound";
     public static final String THEME = "theme";
+    public static final String CUSTOM_PANEL_COLOR = "custom_panel_color";
+    public static final String CUSTOM_KEY_COLOR = "custom_key_color";
 
     private ImePreferences() {}
 

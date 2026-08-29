@@ -5,9 +5,10 @@ import android.content.Context;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Comparator;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -16,8 +17,11 @@ public final class PinyinEngine {
     private final List<Entry> entries = new ArrayList<>();
 
     public PinyinEngine(Context context) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-                context.getAssets().open("pinyin_dictionary.tsv"), StandardCharsets.UTF_8))) {
+        this(openAsset(context));
+    }
+
+    PinyinEngine(Reader source) {
+        try (BufferedReader reader = new BufferedReader(source)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank() || line.startsWith("#")) continue;
@@ -29,6 +33,15 @@ public final class PinyinEngine {
             }
         } catch (IOException | NumberFormatException error) {
             throw new IllegalStateException("无法加载基础拼音词库", error);
+        }
+    }
+
+    private static Reader openAsset(Context context) {
+        try {
+            return new InputStreamReader(context.getAssets().open("pinyin_dictionary.tsv"),
+                    StandardCharsets.UTF_8);
+        } catch (IOException error) {
+            throw new IllegalStateException("无法打开基础拼音词库", error);
         }
     }
 
@@ -47,8 +60,11 @@ public final class PinyinEngine {
             }
         }
 
-        matches.sort(Comparator.comparingInt(Scored::score).reversed()
-                .thenComparingInt(item -> item.entry.text.length()));
+        Collections.sort(matches, (left, right) -> {
+            int scoreOrder = Integer.compare(right.score, left.score);
+            return scoreOrder != 0 ? scoreOrder
+                    : Integer.compare(left.entry.text.length(), right.entry.text.length());
+        });
         List<Candidate> result = new ArrayList<>();
         for (int i = 0; i < Math.min(MAX_CANDIDATES, matches.size()); i++) {
             Scored item = matches.get(i);
@@ -75,7 +91,8 @@ public final class PinyinEngine {
     static String fuzzyCanonical(String value) {
         String result = value;
         result = result.replace("zh", "z").replace("ch", "c").replace("sh", "s");
-        result = result.replace('n', 'l');
+        // n/l is an initial pair; replacing every n would corrupt finals such as -an/-en.
+        if (result.startsWith("n")) result = "l" + result.substring(1);
         result = result.replace('f', 'h');
         result = result.replace("iang", "ian").replace("uang", "uan");
         result = result.replace("ang", "an").replace("eng", "en").replace("ing", "in");
