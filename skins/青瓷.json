@@ -1,0 +1,10 @@
+{
+  "format": "ziyu-ime-skin",
+  "version": 1,
+  "name": "青瓷",
+  "panelColor": "#C7D9D4",
+  "keyColor": "#F7FBFA",
+  "textColor": "#18332E",
+  "accentColor": "#0F766E",
+  "cornerRadius": 10
+}

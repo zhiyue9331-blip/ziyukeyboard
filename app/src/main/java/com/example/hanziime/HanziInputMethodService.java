@@ -66,6 +66,15 @@ public final class HanziInputMethodService extends InputMethodService
     }
 
     @Override
+    public void onDirectText(String text) {
+        if (composition.length() > 0) {
+            if (!candidates.isEmpty()) commitCandidate(candidates.get(0));
+            else commitRaw(composition.toString());
+        }
+        commitDirect(text);
+    }
+
+    @Override
     public void onModeSelected(SimpleKeyboardView.InputMode newMode) {
         if (composition.length() > 0) {
             commitRaw(composition.toString());

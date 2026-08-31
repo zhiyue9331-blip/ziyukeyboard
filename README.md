@@ -9,7 +9,10 @@
 - 拼字输入：`jiuri → 旮（gā，九+日）`、`wangyu/wangyv → 珏（jué，王+玉）`
 - 中文数字墨水手写识别，候选显示拼音，多音字显示多个读音
 - 拼音、拼字、手写、英文、数字和符号模式即时切换
+- 顶部紧凑候选栏、轻量模式栏以及主键盘逗号/句号快捷键
+- 五行常用符号面板，可直接输入中英文标点、括号和网络符号
 - 纸白、青玉、夜色皮肤，以及面板色/按键色自定义
+- 使用 Android 文件选择器导入或导出 JSON 皮肤包
 - 振动反馈和按键音开关
 - 本地词频、连续表达学习和自定义词条
 - 密码类输入框自动停止学习
@@ -59,6 +62,25 @@ subst R: /D
 ## 词库扩展
 
 基础拼音词库位于 `app/src/main/assets/pinyin_dictionary.tsv`，拼字部件库位于 `app/src/main/assets/assembly_dictionary.tsv`。当前内置词库用于验证完整输入流程，正式发行前应替换为经过许可的大规模词库。
+
+## 皮肤包格式
+
+设置页可导入或导出 `.json` 皮肤包。示例文件位于 `skins/青瓷.json`：
+
+```json
+{
+  "format": "ziyu-ime-skin",
+  "version": 1,
+  "name": "青瓷",
+  "panelColor": "#C7D9D4",
+  "keyColor": "#F7FBFA",
+  "textColor": "#18332E",
+  "accentColor": "#0F766E",
+  "cornerRadius": 10
+}
+```
+
+颜色使用 `#RRGGBB` 或 `#AARRGGBB`，圆角范围为 0–24。
 
 ## 验证
 

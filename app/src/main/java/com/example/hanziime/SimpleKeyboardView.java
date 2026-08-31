@@ -21,6 +21,7 @@ public final class SimpleKeyboardView extends LinearLayout {
 
     public interface Listener {
         void onLetter(String text);
+        void onDirectText(String text);
         void onCandidate(Candidate candidate);
         void onSpace();
         void onDelete();
@@ -43,7 +44,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         super(context);
         preferences = ImePreferences.get(context);
         setOrientation(VERTICAL);
-        setPadding(dp(4), dp(6), dp(4), dp(8));
+        setPadding(dp(3), dp(3), dp(3), dp(4));
         setBackgroundColor(panelColor());
         compositionView = new TextView(context);
         candidateRow = new LinearLayout(context);
@@ -60,26 +61,30 @@ public final class SimpleKeyboardView extends LinearLayout {
     private void buildKeyboard() {
         LinearLayout toolbar = createRow();
         addModeButton(toolbar, "拼音", InputMode.PINYIN);
-        addModeButton(toolbar, "拼字", InputMode.ASSEMBLY);
+        addModeButton(toolbar, "拆字", InputMode.ASSEMBLY);
         addModeButton(toolbar, "手写", InputMode.HANDWRITING);
-        addModeButton(toolbar, "英文", InputMode.ENGLISH);
+        addModeButton(toolbar, "中/英", InputMode.ENGLISH);
         addModeButton(toolbar, "123", InputMode.NUMBER);
         addModeButton(toolbar, "符号", InputMode.SYMBOL);
-        addView(toolbar, new LayoutParams(LayoutParams.MATCH_PARENT, dp(38)));
 
         compositionView.setText("中文 · 26键");
-        compositionView.setTextColor(Color.rgb(45, 58, 68));
-        compositionView.setTextSize(15);
+        compositionView.setTextColor(accentColor());
+        compositionView.setTextSize(14);
         compositionView.setGravity(Gravity.CENTER_VERTICAL);
-        compositionView.setPadding(dp(12), 0, 0, 0);
-        addView(compositionView, new LayoutParams(LayoutParams.MATCH_PARENT, dp(36)));
+        compositionView.setPadding(dp(8), 0, dp(8), 0);
 
         candidateRow.setOrientation(HORIZONTAL);
         HorizontalScrollView scroller = new HorizontalScrollView(getContext());
         scroller.setHorizontalScrollBarEnabled(false);
         scroller.addView(candidateRow, new HorizontalScrollView.LayoutParams(
                 LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
-        addView(scroller, new LayoutParams(LayoutParams.MATCH_PARENT, dp(54)));
+        LinearLayout candidateBar = createRow();
+        candidateBar.setGravity(Gravity.CENTER_VERTICAL);
+        candidateBar.addView(compositionView, new LayoutParams(
+                LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
+        candidateBar.addView(scroller, new LayoutParams(0, LayoutParams.MATCH_PARENT, 1f));
+        addView(candidateBar, new LayoutParams(LayoutParams.MATCH_PARENT, dp(46)));
+        addView(toolbar, new LayoutParams(LayoutParams.MATCH_PARENT, dp(34)));
 
         keyboardArea.setOrientation(VERTICAL);
         handwritingArea.setOrientation(VERTICAL);
@@ -88,7 +93,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         addView(keyboardArea, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
 
         handwritingArea.addView(handwritingPad,
-                new LayoutParams(LayoutParams.MATCH_PARENT, dp(150)));
+                new LayoutParams(LayoutParams.MATCH_PARENT, dp(138)));
         LinearLayout inkActions = createRow();
         Button clear = createKey("清空");
         clear.setOnClickListener(view -> handwritingPad.clear());
@@ -106,7 +111,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         });
         inkActions.addView(inkDelete, weightedKey());
         handwritingArea.addView(inkActions,
-                new LayoutParams(LayoutParams.MATCH_PARENT, dp(50)));
+                new LayoutParams(LayoutParams.MATCH_PARENT, dp(44)));
         handwritingArea.setVisibility(View.GONE);
         addView(handwritingArea,
                 new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT));
@@ -115,8 +120,8 @@ public final class SimpleKeyboardView extends LinearLayout {
     private void rebuildKeyArea() {
         keyboardArea.removeAllViews();
         String[] rows = switch (mode) {
-            case NUMBER -> new String[]{"123", "456", "789", "0"};
-            case SYMBOL -> new String[]{"，。？！", "；：、…", "（）《》", "@#%&"};
+            case NUMBER -> new String[]{"123", "456", "789", "+-0.="};
+            case SYMBOL -> new String[]{"！？。，", "；：、…", "（）【】", "《》“”", "@#%&"};
             default -> ROWS;
         };
         for (String keys : rows) {
@@ -129,15 +134,23 @@ public final class SimpleKeyboardView extends LinearLayout {
                 });
                 row.addView(key, weightedKey());
             }
-            keyboardArea.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, dp(48)));
+            keyboardArea.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, dp(43)));
         }
 
         LinearLayout actions = createRow();
+        if (mode != InputMode.NUMBER && mode != InputMode.SYMBOL) {
+            String leftMark = mode == InputMode.ENGLISH ? "," : "，";
+            Button comma = createKey(leftMark);
+            comma.setOnClickListener(view -> {
+                if (listener != null) listener.onDirectText(leftMark);
+            });
+            actions.addView(comma, weightedKey(0.72f));
+        }
         Button delete = createKey("删除");
         delete.setOnClickListener(view -> {
             if (listener != null) listener.onDelete();
         });
-        actions.addView(delete, weightedKey(1.2f));
+        actions.addView(delete, weightedKey(1.08f));
 
         Button space = createKey("空格");
         space.setOnClickListener(view -> {
@@ -145,16 +158,25 @@ public final class SimpleKeyboardView extends LinearLayout {
         });
         actions.addView(space, weightedKey(3f));
 
+        if (mode != InputMode.NUMBER && mode != InputMode.SYMBOL) {
+            String rightMark = mode == InputMode.ENGLISH ? "." : "。";
+            Button period = createKey(rightMark);
+            period.setOnClickListener(view -> {
+                if (listener != null) listener.onDirectText(rightMark);
+            });
+            actions.addView(period, weightedKey(0.72f));
+        }
+
         Button enter = createKey("回车");
         enter.setOnClickListener(view -> {
             if (listener != null) listener.onEnter();
         });
-        actions.addView(enter, weightedKey(1.2f));
-        keyboardArea.addView(actions, new LayoutParams(LayoutParams.MATCH_PARENT, dp(50)));
+        actions.addView(enter, weightedKey(1.08f));
+        keyboardArea.addView(actions, new LayoutParams(LayoutParams.MATCH_PARENT, dp(45)));
     }
 
     public void showCandidates(String composition, java.util.List<Candidate> candidates) {
-        compositionView.setText(composition.isEmpty() ? "中文 · 26键" : composition);
+        compositionView.setText(composition.isEmpty() ? modeTitle() : composition);
         candidateRow.removeAllViews();
         for (Candidate candidate : candidates) {
             String detail = candidate.annotation().isEmpty() ? "" : " 〔" + candidate.annotation() + "〕";
@@ -165,9 +187,9 @@ public final class SimpleKeyboardView extends LinearLayout {
                 if (listener != null) listener.onCandidate(candidate);
             });
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    LayoutParams.WRAP_CONTENT, dp(48));
-            params.setMargins(dp(3), dp(2), dp(3), dp(2));
-            button.setMinWidth(dp(76));
+                    LayoutParams.WRAP_CONTENT, dp(40));
+            params.setMargins(dp(2), dp(2), dp(2), dp(2));
+            button.setMinWidth(dp(68));
             candidateRow.addView(button, params);
         }
     }
@@ -187,6 +209,17 @@ public final class SimpleKeyboardView extends LinearLayout {
 
     public void showHandwritingStatus(String status) {
         compositionView.setText(status);
+    }
+
+    private String modeTitle() {
+        return switch (mode) {
+            case ASSEMBLY -> "拆字输入";
+            case HANDWRITING -> "手写输入";
+            case ENGLISH -> "英文 · 26键";
+            case NUMBER -> "数字键盘";
+            case SYMBOL -> "常用符号";
+            default -> "中文 · 26键";
+        };
     }
 
     private void addModeButton(LinearLayout toolbar, String label, InputMode targetMode) {
@@ -210,12 +243,12 @@ public final class SimpleKeyboardView extends LinearLayout {
         Button key = new Button(getContext());
         key.setText(label);
         key.setTextSize(16);
-        key.setTextColor(Color.rgb(23, 33, 43));
+        key.setTextColor(keyTextColor());
         key.setAllCaps(false);
         key.setPadding(0, 0, 0, 0);
         GradientDrawable background = new GradientDrawable();
         background.setColor(keyColor());
-        background.setCornerRadius(dp(7));
+        background.setCornerRadius(dp(cornerRadius()));
         key.setBackground(background);
         key.setOnTouchListener((view, event) -> {
             if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
@@ -249,6 +282,28 @@ public final class SimpleKeyboardView extends LinearLayout {
         };
     }
 
+    private int accentColor() {
+        if ("custom".equals(preferences.getString(ImePreferences.THEME, "paper"))) {
+            return safeColor(ImePreferences.CUSTOM_ACCENT_COLOR, "#0F766E");
+        }
+        return Color.rgb(15, 118, 110);
+    }
+
+    private int keyTextColor() {
+        if ("custom".equals(preferences.getString(ImePreferences.THEME, "paper"))) {
+            return safeColor(ImePreferences.CUSTOM_TEXT_COLOR, "#17212B");
+        }
+        return Color.rgb(23, 33, 43);
+    }
+
+    private int cornerRadius() {
+        if ("custom".equals(preferences.getString(ImePreferences.THEME, "paper"))) {
+            return Math.max(0, Math.min(24,
+                    preferences.getInt(ImePreferences.CUSTOM_CORNER_RADIUS, 7)));
+        }
+        return 7;
+    }
+
     private int safeColor(String key, String fallback) {
         try {
             return Color.parseColor(preferences.getString(key, fallback));
@@ -262,8 +317,8 @@ public final class SimpleKeyboardView extends LinearLayout {
     }
 
     private LayoutParams weightedKey(float weight) {
-        LayoutParams params = new LayoutParams(0, dp(42), weight);
-        params.setMargins(dp(2), dp(2), dp(2), dp(2));
+        LayoutParams params = new LayoutParams(0, dp(39), weight);
+        params.setMargins(dp(1), dp(1), dp(1), dp(1));
         return params;
     }
 

@@ -12,6 +12,10 @@ public final class ImePreferences {
     public static final String THEME = "theme";
     public static final String CUSTOM_PANEL_COLOR = "custom_panel_color";
     public static final String CUSTOM_KEY_COLOR = "custom_key_color";
+    public static final String CUSTOM_TEXT_COLOR = "custom_text_color";
+    public static final String CUSTOM_ACCENT_COLOR = "custom_accent_color";
+    public static final String CUSTOM_CORNER_RADIUS = "custom_corner_radius";
+    public static final String CUSTOM_SKIN_NAME = "custom_skin_name";
 
     private ImePreferences() {}
 

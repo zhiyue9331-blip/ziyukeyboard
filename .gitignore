@@ -9,3 +9,5 @@ captures/
 app/build/
 .android-sdk/
 .android-sdk-tools.zip
+.adb-home/
+dist/
