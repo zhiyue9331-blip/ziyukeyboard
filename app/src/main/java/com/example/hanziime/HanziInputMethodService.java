@@ -2,6 +2,8 @@ package com.example.hanziime;
 
 import android.inputmethodservice.InputMethodService;
 import android.content.SharedPreferences;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.View;
@@ -19,12 +21,17 @@ import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizerOption
 import com.google.mlkit.vision.digitalink.recognition.Ink;
 
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class HanziInputMethodService extends InputMethodService
         implements SimpleKeyboardView.Listener {
     private final StringBuilder composition = new StringBuilder();
-    private PinyinEngine pinyinEngine;
-    private AssemblyEngine assemblyEngine;
+    private volatile PinyinEngine pinyinEngine;
+    private volatile AssemblyEngine assemblyEngine;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private ExecutorService dictionaryLoader;
+    private boolean destroyed;
     private SimpleKeyboardView keyboard;
     private java.util.List<Candidate> candidates = java.util.List.of();
     private SimpleKeyboardView.InputMode mode = SimpleKeyboardView.InputMode.PINYIN;
@@ -39,11 +46,40 @@ public final class HanziInputMethodService extends InputMethodService
     @Override
     public void onCreate() {
         super.onCreate();
-        pinyinEngine = new PinyinEngine(this);
-        assemblyEngine = new AssemblyEngine(this);
+        // Keep service startup fast. Android may abandon an IME which blocks while being bound.
+        pinyinEngine = new PinyinEngine(this, false);
+        assemblyEngine = new AssemblyEngine(this, false);
         preferences = ImePreferences.get(this);
         userLexicon = new UserLexiconStore(this);
         initializeHandwritingRecognizer();
+        loadFullDictionariesInBackground();
+    }
+
+    private void loadFullDictionariesInBackground() {
+        dictionaryLoader = Executors.newSingleThreadExecutor();
+        dictionaryLoader.execute(() -> {
+            try {
+                PinyinEngine fullPinyin = new PinyinEngine(getApplicationContext(), true);
+                AssemblyEngine fullAssembly = new AssemblyEngine(getApplicationContext(), true);
+                mainHandler.post(() -> {
+                    if (destroyed) return;
+                    pinyinEngine = fullPinyin;
+                    assemblyEngine = fullAssembly;
+                    if (composition.length() > 0) refreshCandidates();
+                });
+            } catch (RuntimeException ignored) {
+                // The built-in core dictionaries remain usable if an expanded asset is damaged.
+            }
+        });
+    }
+
+    @Override
+    public void onDestroy() {
+        destroyed = true;
+        mainHandler.removeCallbacksAndMessages(null);
+        if (dictionaryLoader != null) dictionaryLoader.shutdownNow();
+        if (handwritingRecognizer != null) handwritingRecognizer.close();
+        super.onDestroy();
     }
 
     @Override
@@ -261,12 +297,6 @@ public final class HanziInputMethodService extends InputMethodService
                 .addOnFailureListener(error -> {
                     if (keyboard != null) keyboard.showHandwritingStatus("无法检查手写模型");
                 });
-    }
-
-    @Override
-    public void onDestroy() {
-        if (handwritingRecognizer != null) handwritingRecognizer.close();
-        super.onDestroy();
     }
 
     private static final class ListBuilder {

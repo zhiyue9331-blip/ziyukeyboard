@@ -20,8 +20,12 @@ public final class AssemblyEngine {
     private final Map<String, List<Entry>> prefixIndex = new HashMap<>();
 
     public AssemblyEngine(Context context) {
+        this(context, true);
+    }
+
+    AssemblyEngine(Context context, boolean includeFullDictionary) {
         load(openAsset(context, "assembly_dictionary.tsv"), 1_000_000);
-        load(openAsset(context, "assembly_full.tsv"), 0);
+        if (includeFullDictionary) load(openAsset(context, "assembly_full.tsv"), 0);
     }
 
     AssemblyEngine(Reader source) {
