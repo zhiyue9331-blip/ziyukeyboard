@@ -1,9 +1,13 @@
 package com.example.hanziime;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.io.StringReader;
 
 public class AssemblyEngineTest {
@@ -27,5 +31,24 @@ public class AssemblyEngineTest {
                 .search("wangyv").get(0);
         assertEquals("珏", candidate.text());
         assertEquals("jué", candidate.pinyin());
+    }
+
+    @Test
+    public void bundledDictionaryContainsThousandsOfGeneratedCombinations() throws IOException {
+        AssemblyEngine engine = new AssemblyEngine(new FileReader(asset("assembly_full.tsv")));
+        assertTrue(engine.search("jiuri").stream()
+                .anyMatch(candidate -> candidate.text().equals("旮")));
+        assertTrue(engine.search("wangyu").stream()
+                .anyMatch(candidate -> candidate.text().equals("珏")));
+        assertFalseOrMoreThanExamples(engine);
+    }
+
+    private static void assertFalseOrMoreThanExamples(AssemblyEngine engine) {
+        assertTrue(engine.search("mumu").size() > 2);
+    }
+
+    private static File asset(String name) {
+        File direct = new File("src/main/assets", name);
+        return direct.isFile() ? direct : new File("app/src/main/assets", name);
     }
 }

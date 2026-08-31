@@ -4,9 +4,9 @@
 
 ## 已实现功能
 
-- 26 键拼音输入、简拼和候选前缀匹配
+- 26 键拼音输入、简拼和候选前缀匹配，内置 6.5 万余条离线候选
 - 常见声母、模糊音及前后鼻音匹配
-- 拼字输入：`jiuri → 旮（gā，九+日）`、`wangyu/wangyv → 珏（jué，王+玉）`
+- 拼字输入：内置 1.1 万余种部件组合，并保留 `jiuri → 旮（gā，九+日）`、`wangyu/wangyv → 珏（jué，王+玉）`
 - 中文数字墨水手写识别，候选显示拼音，多音字显示多个读音
 - 拼音、拼字、手写、英文、数字和符号模式即时切换
 - 顶部紧凑候选栏、轻量模式栏以及主键盘逗号/句号快捷键
@@ -61,7 +61,7 @@ subst R: /D
 
 ## 词库扩展
 
-基础拼音词库位于 `app/src/main/assets/pinyin_dictionary.tsv`，拼字部件库位于 `app/src/main/assets/assembly_dictionary.tsv`。当前内置词库用于验证完整输入流程，正式发行前应替换为经过许可的大规模词库。
+项目同时加载人工校正词条和大规模离线词库。拼音数据位于 `app/src/main/assets/pinyin_dictionary.tsv` 与 `pinyin_rime.tsv`；拼字数据位于 `assembly_dictionary.tsv` 与 `assembly_full.tsv`。生成命令及上游许可见 `tools/generate_dictionaries.ps1` 和 `THIRD_PARTY_NOTICES.md`。
 
 ## 皮肤包格式
 
@@ -84,7 +84,7 @@ subst R: /D
 
 ## 验证
 
-项目包含 8 个 JVM 单元测试，覆盖全拼、简拼、模糊音、拼字示例以及手写候选拼音。最终检查命令：
+JVM 单元测试覆盖全拼、简拼、模糊音、大规模离线词库、拼字组合以及手写候选拼音。最终检查命令：
 
 ```powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug

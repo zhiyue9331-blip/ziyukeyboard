@@ -124,8 +124,24 @@ public final class SimpleKeyboardView extends LinearLayout {
             case SYMBOL -> new String[]{"！？。，", "；：、…", "（）【】", "《》“”", "@#%&"};
             default -> ROWS;
         };
-        for (String keys : rows) {
+        boolean letterLayout = mode == InputMode.PINYIN || mode == InputMode.ASSEMBLY
+                || mode == InputMode.ENGLISH;
+        for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+            String keys = rows[rowIndex];
             LinearLayout row = createRow();
+            if (letterLayout && rowIndex == 1) {
+                row.addView(new View(getContext()), weightedKey(0.48f));
+            }
+            if (letterLayout && rowIndex == 2) {
+                InputMode target = mode == InputMode.ENGLISH ? InputMode.PINYIN : InputMode.ENGLISH;
+                String label = mode == InputMode.ENGLISH ? "中文" : "英文";
+                Button language = createKey(label);
+                language.setTextSize(13);
+                language.setOnClickListener(view -> {
+                    if (listener != null) listener.onModeSelected(target);
+                });
+                row.addView(language, weightedKey(1.18f));
+            }
             for (int i = 0; i < keys.length(); i++) {
                 String letter = String.valueOf(keys.charAt(i));
                 Button key = createKey(letter);
@@ -134,23 +150,48 @@ public final class SimpleKeyboardView extends LinearLayout {
                 });
                 row.addView(key, weightedKey());
             }
+            if (letterLayout && rowIndex == 1) {
+                row.addView(new View(getContext()), weightedKey(0.48f));
+            }
+            if (letterLayout && rowIndex == 2) {
+                Button delete = createKey("⌫");
+                delete.setTextSize(20);
+                delete.setOnClickListener(view -> {
+                    if (listener != null) listener.onDelete();
+                });
+                row.addView(delete, weightedKey(1.18f));
+            }
             keyboardArea.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, dp(43)));
         }
 
         LinearLayout actions = createRow();
-        if (mode != InputMode.NUMBER && mode != InputMode.SYMBOL) {
+        if (letterLayout) {
+            Button symbols = createKey("符");
+            symbols.setOnClickListener(view -> {
+                if (listener != null) listener.onModeSelected(InputMode.SYMBOL);
+            });
+            actions.addView(symbols, weightedKey(0.82f));
+
+            Button numbers = createKey("123");
+            numbers.setTextSize(13);
+            numbers.setOnClickListener(view -> {
+                if (listener != null) listener.onModeSelected(InputMode.NUMBER);
+            });
+            actions.addView(numbers, weightedKey(0.92f));
+
             String leftMark = mode == InputMode.ENGLISH ? "," : "，";
             Button comma = createKey(leftMark);
             comma.setOnClickListener(view -> {
                 if (listener != null) listener.onDirectText(leftMark);
             });
-            actions.addView(comma, weightedKey(0.72f));
+            actions.addView(comma, weightedKey(0.62f));
+        } else {
+            Button letters = createKey("ABC");
+            letters.setOnClickListener(view -> {
+                if (listener != null) listener.onModeSelected(InputMode.PINYIN);
+            });
+            actions.addView(letters, weightedKey());
         }
-        Button delete = createKey("删除");
-        delete.setOnClickListener(view -> {
-            if (listener != null) listener.onDelete();
-        });
-        actions.addView(delete, weightedKey(1.08f));
 
         Button space = createKey("空格");
         space.setOnClickListener(view -> {
@@ -158,13 +199,20 @@ public final class SimpleKeyboardView extends LinearLayout {
         });
         actions.addView(space, weightedKey(3f));
 
-        if (mode != InputMode.NUMBER && mode != InputMode.SYMBOL) {
+        if (letterLayout) {
             String rightMark = mode == InputMode.ENGLISH ? "." : "。";
             Button period = createKey(rightMark);
             period.setOnClickListener(view -> {
                 if (listener != null) listener.onDirectText(rightMark);
             });
-            actions.addView(period, weightedKey(0.72f));
+            actions.addView(period, weightedKey(0.62f));
+        } else {
+            Button delete = createKey("⌫");
+            delete.setTextSize(20);
+            delete.setOnClickListener(view -> {
+                if (listener != null) listener.onDelete();
+            });
+            actions.addView(delete, weightedKey());
         }
 
         Button enter = createKey("回车");

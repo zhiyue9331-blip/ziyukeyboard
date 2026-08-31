@@ -11,3 +11,4 @@ app/build/
 .android-sdk-tools.zip
 .adb-home/
 dist/
+.downloads/

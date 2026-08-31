@@ -9,17 +9,26 @@ import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** Finds a Han character from the spoken names of its visible components. */
 public final class AssemblyEngine {
-    private final List<Entry> entries = new ArrayList<>();
+    private final Map<String, List<Entry>> prefixIndex = new HashMap<>();
 
     public AssemblyEngine(Context context) {
-        this(openAsset(context));
+        load(openAsset(context, "assembly_dictionary.tsv"), 1_000_000);
+        load(openAsset(context, "assembly_full.tsv"), 0);
     }
 
     AssemblyEngine(Reader source) {
+        load(source, 0);
+    }
+
+    private void load(Reader source, int priorityBonus) {
         try (BufferedReader reader = new BufferedReader(source)) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -27,8 +36,8 @@ public final class AssemblyEngine {
                 String[] fields = line.split("\\t");
                 if (fields.length >= 5) {
                     for (String alias : fields[0].split(",")) {
-                        entries.add(new Entry(PinyinEngine.normalize(alias), fields[1], fields[2],
-                                fields[3], Integer.parseInt(fields[4])));
+                        addEntry(new Entry(PinyinEngine.normalize(alias), fields[1], fields[2],
+                                fields[3], Integer.parseInt(fields[4]) + priorityBonus));
                     }
                 }
             }
@@ -37,37 +46,46 @@ public final class AssemblyEngine {
         }
     }
 
-    private static Reader openAsset(Context context) {
+    private void addEntry(Entry entry) {
+        for (int length = 1; length <= Math.min(2, entry.key.length()); length++) {
+            String prefix = entry.key.substring(0, length);
+            List<Entry> bucket = prefixIndex.get(prefix);
+            if (bucket == null) {
+                bucket = new ArrayList<>();
+                prefixIndex.put(prefix, bucket);
+            }
+            bucket.add(entry);
+        }
+    }
+
+    private static Reader openAsset(Context context, String name) {
         try {
-            return new InputStreamReader(context.getAssets().open("assembly_dictionary.tsv"),
-                    StandardCharsets.UTF_8);
+            return new InputStreamReader(context.getAssets().open(name), StandardCharsets.UTF_8);
         } catch (IOException error) {
-            throw new IllegalStateException("无法打开拼字部件库", error);
+            throw new IllegalStateException("无法打开拼字部件库：" + name, error);
         }
     }
 
     public List<Candidate> search(String rawInput) {
         String query = PinyinEngine.normalize(rawInput);
         if (query.isEmpty()) return List.of();
+        String prefix = query.substring(0, Math.min(2, query.length()));
         List<Entry> matches = new ArrayList<>();
-        for (Entry entry : entries) {
-            if (entry.key.startsWith(query)) matches.add(entry);
+        List<Entry> indexed = prefixIndex.get(prefix);
+        if (indexed != null) {
+            for (Entry entry : indexed) {
+                if (entry.key.startsWith(query)) matches.add(entry);
+            }
         }
         Collections.sort(matches, (left, right) -> Integer.compare(
                 score(right, query), score(left, query)));
         List<Candidate> result = new ArrayList<>();
-        for (int i = 0; i < Math.min(24, matches.size()); i++) {
-            Entry entry = matches.get(i);
-            Candidate candidate = new Candidate(entry.text, entry.pinyin, entry.frequency,
-                    Candidate.Source.ASSEMBLY, entry.components);
-            boolean duplicate = false;
-            for (Candidate existing : result) {
-                if (existing.text().equals(candidate.text())) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (!duplicate) result.add(candidate);
+        Set<String> seenText = new LinkedHashSet<>();
+        for (Entry entry : matches) {
+            if (!seenText.add(entry.text)) continue;
+            result.add(new Candidate(entry.text, entry.pinyin, entry.frequency,
+                    Candidate.Source.ASSEMBLY, entry.components));
+            if (result.size() == 24) break;
         }
         return result;
     }

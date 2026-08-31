@@ -2,9 +2,13 @@ package com.example.hanziime;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.io.StringReader;
 import java.util.List;
 
@@ -41,5 +45,21 @@ public class PinyinEngineTest {
                 PinyinEngine.fuzzyCanonical("zan"));
         assertEquals(PinyinEngine.fuzzyCanonical("ling"),
                 PinyinEngine.fuzzyCanonical("nin"));
+    }
+
+    @Test
+    public void bundledDictionaryProvidesRealWorldPhrases() throws IOException {
+        PinyinEngine engine = new PinyinEngine(new FileReader(asset("pinyin_rime.tsv")));
+        assertTrue(engine.search("zhongguo", false).stream()
+                .anyMatch(candidate -> candidate.text().equals("中国")));
+        assertTrue(engine.search("beijing", false).stream()
+                .anyMatch(candidate -> candidate.text().equals("北京")));
+        assertTrue(engine.search("shijie", false).stream()
+                .anyMatch(candidate -> candidate.text().equals("世界")));
+    }
+
+    private static File asset(String name) {
+        File direct = new File("src/main/assets", name);
+        return direct.isFile() ? direct : new File("app/src/main/assets", name);
     }
 }
