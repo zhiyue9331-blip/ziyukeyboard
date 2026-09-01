@@ -21,6 +21,9 @@ import com.google.mlkit.vision.digitalink.recognition.DigitalInkRecognizerOption
 import com.google.mlkit.vision.digitalink.recognition.Ink;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -32,7 +35,7 @@ public final class HanziInputMethodService extends InputMethodService
     private volatile RimeEngine rimeEngine;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private ExecutorService dictionaryLoader;
-    private boolean destroyed;
+    private volatile boolean destroyed;
     private SimpleKeyboardView keyboard;
     private java.util.List<Candidate> candidates = java.util.List.of();
     private SimpleKeyboardView.InputMode mode = SimpleKeyboardView.InputMode.PINYIN;
@@ -62,20 +65,25 @@ public final class HanziInputMethodService extends InputMethodService
             try {
                 PinyinEngine fullPinyin = new PinyinEngine(getApplicationContext(), true);
                 AssemblyEngine fullAssembly = new AssemblyEngine(getApplicationContext(), true);
-                RimeEngine readyRime = RimeEngine.create(getApplicationContext());
                 mainHandler.post(() -> {
-                    if (destroyed) {
-                        if (readyRime != null) readyRime.close();
-                        return;
-                    }
+                    if (destroyed) return;
                     pinyinEngine = fullPinyin;
                     assemblyEngine = fullAssembly;
-                    rimeEngine = readyRime;
                     if (composition.length() > 0) refreshCandidates();
                 });
             } catch (RuntimeException ignored) {
                 // The built-in core dictionaries remain usable if an expanded asset is damaged.
             }
+            if (destroyed) return;
+            RimeEngine readyRime = RimeEngine.create(getApplicationContext());
+            mainHandler.post(() -> {
+                if (destroyed) {
+                    if (readyRime != null) readyRime.close();
+                    return;
+                }
+                rimeEngine = readyRime;
+                if (composition.length() > 0) refreshCandidates();
+            });
         });
     }
 
@@ -220,21 +228,36 @@ public final class HanziInputMethodService extends InputMethodService
             java.util.List<Candidate> decoded = rimeEngine == null
                     ? java.util.List.of()
                     : rimeEngine.searchAssembly(composition.toString());
-            candidates = decoded.isEmpty()
-                    ? assemblyEngine.search(composition.toString())
-                    : assemblyEngine.decorateRimeCandidates(decoded);
+            candidates = mergeCandidates(
+                    assemblyEngine.decorateRimeCandidates(decoded),
+                    assemblyEngine.search(composition.toString()));
         } else {
             boolean fuzzy = ImePreferences.enabled(preferences, ImePreferences.FUZZY);
             java.util.List<Candidate> decoded = rimeEngine == null
                     ? java.util.List.of()
                     : rimeEngine.search(composition.toString(), fuzzy);
-            if (decoded.isEmpty()) decoded = pinyinEngine.search(composition.toString(), fuzzy);
-            java.util.List<Candidate> merged = new ArrayList<>(decoded);
-            if (!privateInput) merged.addAll(0, userLexicon.customFor(composition.toString()));
-            candidates = merged;
+            java.util.List<Candidate> custom = privateInput
+                    ? java.util.List.of()
+                    : userLexicon.customFor(composition.toString());
+            candidates = mergeCandidates(custom, decoded,
+                    pinyinEngine.search(composition.toString(), fuzzy));
         }
         if (learningAllowed()) candidates = userLexicon.rerank(candidates);
+        if (candidates.size() > 24) candidates = new ArrayList<>(candidates.subList(0, 24));
         if (keyboard != null) keyboard.showCandidates(composition.toString(), candidates);
+    }
+
+    @SafeVarargs
+    static List<Candidate> mergeCandidates(List<Candidate>... groups) {
+        Map<String, Candidate> unique = new LinkedHashMap<>();
+        for (List<Candidate> group : groups) {
+            for (Candidate candidate : group) {
+                if (!unique.containsKey(candidate.text())) {
+                    unique.put(candidate.text(), candidate);
+                }
+            }
+        }
+        return new ArrayList<>(unique.values());
     }
 
     private void commitCandidate(Candidate candidate) {

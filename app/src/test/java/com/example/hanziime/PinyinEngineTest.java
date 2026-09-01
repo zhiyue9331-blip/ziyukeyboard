@@ -56,6 +56,9 @@ public class PinyinEngineTest {
                 .anyMatch(candidate -> candidate.text().equals("北京")));
         assertTrue(engine.search("shijie", false).stream()
                 .anyMatch(candidate -> candidate.text().equals("世界")));
+        List<Candidate> morning = engine.search("zaoshang", false);
+        assertTrue(morning.stream().anyMatch(candidate -> candidate.text().equals("早上")));
+        assertTrue(morning.stream().anyMatch(candidate -> candidate.text().equals("早上好")));
     }
 
     private static File asset(String name) {
