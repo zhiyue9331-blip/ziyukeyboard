@@ -22,5 +22,19 @@ public class CandidateMergeTest {
         assertEquals(List.of("早上", "早上好"),
                 result.stream().map(Candidate::text).toList());
         assertEquals(Candidate.Source.RIME, result.get(0).source());
+        assertEquals("zǎo shang", result.get(0).pinyin());
+    }
+
+    @Test
+    public void selectingFirstSyllableKeepsTheUnconsumedPinyin() {
+        Candidate firstCharacter = new Candidate("你", "nǐ", 100,
+                Candidate.Source.PINYIN);
+        Candidate wholePhrase = new Candidate("你好", "nǐ hǎo", 100,
+                Candidate.Source.PINYIN);
+
+        assertEquals("hao", HanziInputMethodService.remainingPinyin(
+                "nihao", firstCharacter));
+        assertEquals("", HanziInputMethodService.remainingPinyin(
+                "nihao", wholePhrase));
     }
 }

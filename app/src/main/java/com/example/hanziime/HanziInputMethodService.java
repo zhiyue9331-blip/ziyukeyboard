@@ -252,15 +252,39 @@ public final class HanziInputMethodService extends InputMethodService
         Map<String, Candidate> unique = new LinkedHashMap<>();
         for (List<Candidate> group : groups) {
             for (Candidate candidate : group) {
-                if (!unique.containsKey(candidate.text())) {
+                Candidate existing = unique.get(candidate.text());
+                if (existing == null) {
                     unique.put(candidate.text(), candidate);
+                } else if (existing.source() == Candidate.Source.RIME
+                        && candidate.source() == Candidate.Source.PINYIN) {
+                    unique.put(candidate.text(), new Candidate(existing.text(),
+                            candidate.pinyin(), existing.score(), existing.source(),
+                            existing.annotation()));
                 }
             }
         }
         return new ArrayList<>(unique.values());
     }
 
+    static String remainingPinyin(String rawComposition, Candidate candidate) {
+        if (candidate.source() != Candidate.Source.PINYIN
+                && candidate.source() != Candidate.Source.RIME
+                && candidate.source() != Candidate.Source.USER) {
+            return "";
+        }
+        String input = PinyinEngine.normalize(rawComposition);
+        String consumed = PinyinEngine.normalize(candidate.pinyin());
+        if (!consumed.isEmpty() && consumed.length() < input.length()
+                && input.startsWith(consumed)) {
+            return input.substring(consumed.length());
+        }
+        return "";
+    }
+
     private void commitCandidate(Candidate candidate) {
+        String remaining = mode == SimpleKeyboardView.InputMode.PINYIN
+                ? remainingPinyin(composition.toString(), candidate)
+                : "";
         if ((candidate.source() == Candidate.Source.RIME
                 || candidate.source() == Candidate.Source.RIME_ASSEMBLY)
                 && rimeEngine != null) {
@@ -270,8 +294,14 @@ public final class HanziInputMethodService extends InputMethodService
         commitDirect(candidate.text());
         previousCommitted = candidate.text();
         composition.setLength(0);
-        candidates = learningAllowed() ? userLexicon.nextAfter(previousCommitted) : java.util.List.of();
-        if (keyboard != null) keyboard.showCandidates("", candidates);
+        composition.append(remaining);
+        if (!remaining.isEmpty()) {
+            refreshCandidates();
+        } else {
+            candidates = learningAllowed()
+                    ? userLexicon.nextAfter(previousCommitted) : java.util.List.of();
+            if (keyboard != null) keyboard.showCandidates("", candidates);
+        }
         if (candidate.source() == Candidate.Source.HANDWRITING && keyboard != null) {
             keyboard.clearHandwriting();
         }

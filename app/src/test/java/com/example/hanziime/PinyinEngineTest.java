@@ -37,6 +37,7 @@ public class PinyinEngineTest {
     @Test
     public void normalizesUmlautAndSeparators() {
         assertEquals("nvpengyou", PinyinEngine.normalize("NÜ-peng'you"));
+        assertEquals("nihao", PinyinEngine.normalize("nǐ hǎo"));
     }
 
     @Test

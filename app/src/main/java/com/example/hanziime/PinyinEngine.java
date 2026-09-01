@@ -128,6 +128,9 @@ public final class PinyinEngine {
     static String normalize(String input) {
         return input.toLowerCase(Locale.ROOT)
                 .replace("ü", "v")
+                .replaceAll("[āáǎà]", "a").replaceAll("[ēéěè]", "e")
+                .replaceAll("[īíǐì]", "i").replaceAll("[ōóǒò]", "o")
+                .replaceAll("[ūúǔù]", "u").replaceAll("[ǖǘǚǜ]", "v")
                 .replaceAll("[^a-z]", "");
     }
 
