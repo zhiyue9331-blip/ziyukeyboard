@@ -51,14 +51,20 @@ final class RimeEngine implements AutoCloseable {
         String[] nativeRows = RimeNativeBridge.query(input, schema, 24);
         List<Candidate> result = new ArrayList<>();
         candidateIndexes.clear();
-        for (int index = 0; index + 1 < nativeRows.length; index += 2) {
+        for (int index = 0; index + 2 < nativeRows.length; index += 3) {
             String text = nativeRows[index];
             String comment = nativeRows[index + 1];
+            int consumedLength;
+            try {
+                consumedLength = Integer.parseInt(nativeRows[index + 2]);
+            } catch (NumberFormatException ignored) {
+                consumedLength = -1;
+            }
             String pronunciation = comment.isBlank() ? input : comment;
             Candidate candidate = new Candidate(text, pronunciation,
-                    100_000 - index, source);
+                    100_000 - index / 3, source, "", consumedLength);
             result.add(candidate);
-            candidateIndexes.put(text, index / 2);
+            candidateIndexes.put(text, index / 3);
         }
         return result;
     }

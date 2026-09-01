@@ -259,7 +259,7 @@ public final class HanziInputMethodService extends InputMethodService
                         && candidate.source() == Candidate.Source.PINYIN) {
                     unique.put(candidate.text(), new Candidate(existing.text(),
                             candidate.pinyin(), existing.score(), existing.source(),
-                            existing.annotation()));
+                            existing.annotation(), existing.consumedInputLength()));
                 }
             }
         }
@@ -273,6 +273,10 @@ public final class HanziInputMethodService extends InputMethodService
             return "";
         }
         String input = PinyinEngine.normalize(rawComposition);
+        int nativeConsumed = candidate.consumedInputLength();
+        if (nativeConsumed > 0) {
+            return nativeConsumed < input.length() ? input.substring(nativeConsumed) : "";
+        }
         String consumed = PinyinEngine.normalize(candidate.pinyin());
         if (!consumed.isEmpty() && consumed.length() < input.length()
                 && input.startsWith(consumed)) {

@@ -1,5 +1,6 @@
 #include <jni.h>
 #include <rime_api.h>
+#include <rime/menu.h>
 
 #include <mutex>
 #include <string>
@@ -80,10 +81,16 @@ Java_com_example_hanziime_RimeNativeBridge_query(
 
   RimeCandidateListIterator iterator{};
   if (api->candidate_list_begin(session_id, &iterator)) {
-    while (values.size() / 2 < static_cast<size_t>(limit)
+    while (values.size() / 3 < static_cast<size_t>(limit)
            && api->candidate_list_next(&iterator)) {
+      auto* menu = reinterpret_cast<rime::Menu*>(iterator.ptr);
+      auto internal_candidate = menu
+          ? menu->GetCandidateAt(static_cast<size_t>(iterator.index))
+          : nullptr;
       values.emplace_back(iterator.candidate.text ? iterator.candidate.text : "");
       values.emplace_back(iterator.candidate.comment ? iterator.candidate.comment : "");
+      values.emplace_back(internal_candidate
+          ? std::to_string(internal_candidate->end()) : "-1");
     }
     api->candidate_list_end(&iterator);
   }

@@ -75,7 +75,8 @@ public final class AssemblyEngine {
                 result.add(candidate);
             } else {
                 result.add(new Candidate(candidate.text(), entry.pinyin, candidate.score(),
-                        Candidate.Source.RIME_ASSEMBLY, entry.components));
+                        Candidate.Source.RIME_ASSEMBLY, entry.components,
+                        candidate.consumedInputLength()));
             }
         }
         return result;

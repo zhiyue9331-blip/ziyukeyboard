@@ -10,7 +10,7 @@ public class CandidateMergeTest {
     @Test
     public void combinesRimeAndCompletionCandidatesWithoutDuplicates() {
         Candidate rime = new Candidate("早上", "zao shang", 100,
-                Candidate.Source.RIME);
+                Candidate.Source.RIME, "", 8);
         Candidate duplicate = new Candidate("早上", "zǎo shang", 90,
                 Candidate.Source.PINYIN);
         Candidate completion = new Candidate("早上好", "zǎo shang hǎo", 80,
@@ -23,12 +23,13 @@ public class CandidateMergeTest {
                 result.stream().map(Candidate::text).toList());
         assertEquals(Candidate.Source.RIME, result.get(0).source());
         assertEquals("zǎo shang", result.get(0).pinyin());
+        assertEquals(8, result.get(0).consumedInputLength());
     }
 
     @Test
     public void selectingFirstSyllableKeepsTheUnconsumedPinyin() {
-        Candidate firstCharacter = new Candidate("你", "nǐ", 100,
-                Candidate.Source.PINYIN);
+        Candidate firstCharacter = new Candidate("你", "nihao", 100,
+                Candidate.Source.RIME, "", 2);
         Candidate wholePhrase = new Candidate("你好", "nǐ hǎo", 100,
                 Candidate.Source.PINYIN);
 

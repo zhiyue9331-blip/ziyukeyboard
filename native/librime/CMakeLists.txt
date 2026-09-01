@@ -54,8 +54,11 @@ add_subdirectory("${RIME_SOURCE}" librime EXCLUDE_FROM_ALL)
 target_compile_options(rime-static PRIVATE -Wno-error=deprecated-declarations)
 
 add_library(ziyu_rime SHARED rime_jni.cpp)
+file(GLOB ZIYU_BOOST_INCLUDE_DIRS LIST_DIRECTORIES TRUE
+  "${BOOST_SOURCE}/libs/*/include")
 target_include_directories(ziyu_rime PRIVATE
   "${RIME_SOURCE}/src"
-  "${CMAKE_BINARY_DIR}/librime/src")
-target_link_libraries(ziyu_rime PRIVATE rime-static android log)
+  "${CMAKE_BINARY_DIR}/librime/src"
+  ${ZIYU_BOOST_INCLUDE_DIRS})
+target_link_libraries(ziyu_rime PRIVATE rime-static Boost::headers android log)
 target_compile_options(ziyu_rime PRIVATE -fvisibility=hidden)
