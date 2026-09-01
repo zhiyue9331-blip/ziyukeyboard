@@ -29,6 +29,7 @@ public final class HanziInputMethodService extends InputMethodService
     private final StringBuilder composition = new StringBuilder();
     private volatile PinyinEngine pinyinEngine;
     private volatile AssemblyEngine assemblyEngine;
+    private volatile RimeEngine rimeEngine;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private ExecutorService dictionaryLoader;
     private boolean destroyed;
@@ -61,10 +62,15 @@ public final class HanziInputMethodService extends InputMethodService
             try {
                 PinyinEngine fullPinyin = new PinyinEngine(getApplicationContext(), true);
                 AssemblyEngine fullAssembly = new AssemblyEngine(getApplicationContext(), true);
+                RimeEngine readyRime = RimeEngine.create(getApplicationContext());
                 mainHandler.post(() -> {
-                    if (destroyed) return;
+                    if (destroyed) {
+                        if (readyRime != null) readyRime.close();
+                        return;
+                    }
                     pinyinEngine = fullPinyin;
                     assemblyEngine = fullAssembly;
+                    rimeEngine = readyRime;
                     if (composition.length() > 0) refreshCandidates();
                 });
             } catch (RuntimeException ignored) {
@@ -78,6 +84,7 @@ public final class HanziInputMethodService extends InputMethodService
         destroyed = true;
         mainHandler.removeCallbacksAndMessages(null);
         if (dictionaryLoader != null) dictionaryLoader.shutdownNow();
+        if (rimeEngine != null) rimeEngine.close();
         if (handwritingRecognizer != null) handwritingRecognizer.close();
         super.onDestroy();
     }
@@ -210,11 +217,19 @@ public final class HanziInputMethodService extends InputMethodService
 
     private void refreshCandidates() {
         if (mode == SimpleKeyboardView.InputMode.ASSEMBLY) {
-            candidates = assemblyEngine.search(composition.toString());
+            java.util.List<Candidate> decoded = rimeEngine == null
+                    ? java.util.List.of()
+                    : rimeEngine.searchAssembly(composition.toString());
+            candidates = decoded.isEmpty()
+                    ? assemblyEngine.search(composition.toString())
+                    : assemblyEngine.decorateRimeCandidates(decoded);
         } else {
             boolean fuzzy = ImePreferences.enabled(preferences, ImePreferences.FUZZY);
-            java.util.List<Candidate> merged = new ArrayList<>(
-                    pinyinEngine.search(composition.toString(), fuzzy));
+            java.util.List<Candidate> decoded = rimeEngine == null
+                    ? java.util.List.of()
+                    : rimeEngine.search(composition.toString(), fuzzy);
+            if (decoded.isEmpty()) decoded = pinyinEngine.search(composition.toString(), fuzzy);
+            java.util.List<Candidate> merged = new ArrayList<>(decoded);
             if (!privateInput) merged.addAll(0, userLexicon.customFor(composition.toString()));
             candidates = merged;
         }
@@ -223,6 +238,11 @@ public final class HanziInputMethodService extends InputMethodService
     }
 
     private void commitCandidate(Candidate candidate) {
+        if ((candidate.source() == Candidate.Source.RIME
+                || candidate.source() == Candidate.Source.RIME_ASSEMBLY)
+                && rimeEngine != null) {
+            rimeEngine.recordSelection(candidate);
+        }
         if (learningAllowed()) userLexicon.record(candidate, previousCommitted);
         commitDirect(candidate.text());
         previousCommitted = candidate.text();

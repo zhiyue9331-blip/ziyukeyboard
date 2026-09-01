@@ -3,7 +3,7 @@ package com.example.hanziime;
 import java.util.Objects;
 
 public final class Candidate {
-    public enum Source { PINYIN, ASSEMBLY, HANDWRITING, USER }
+    public enum Source { PINYIN, RIME, RIME_ASSEMBLY, ASSEMBLY, HANDWRITING, USER }
 
     private final String text;
     private final String pinyin;

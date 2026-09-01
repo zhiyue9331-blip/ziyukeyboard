@@ -1,0 +1,51 @@
+schema:
+  schema_id: ziyu_pinyin_fuzzy
+  name: 字语拼音·模糊音
+  version: "1.0"
+
+switches:
+  - name: ascii_mode
+    reset: 0
+    states: [中文, 英文]
+
+engine:
+  processors:
+    - ascii_composer
+    - speller
+    - selector
+    - navigator
+    - express_editor
+  segmentors:
+    - ascii_segmentor
+    - abc_segmentor
+    - fallback_segmentor
+  translators:
+    - script_translator
+  filters:
+    - uniquifier
+
+speller:
+  alphabet: zyxwvutsrqponmlkjihgfedcba
+  delimiter: " '"
+  algebra:
+    - derive/^([zcs])h/$1/
+    - derive/^([zcs])([^h])/$1h$2/
+    - derive/^n/l/
+    - derive/^l/n/
+    - derive/^hu$/fu/
+    - derive/^fu$/hu/
+    - derive/([ei])n$/$1ng/
+    - derive/([ei])ng$/$1n/
+    - derive/([a])n$/$1ng/
+    - derive/([a])ng$/$1n/
+    - abbrev/^([a-z]).+$/$1/
+    - abbrev/^([zcs]h).+$/$1/
+
+translator:
+  dictionary: pinyin_simp
+  enable_user_dict: true
+  enable_sentence: true
+  enable_completion: true
+  preedit_format:
+    - xform/([nl])v/$1ü/
+    - xform/([jqxy])v/$1u/

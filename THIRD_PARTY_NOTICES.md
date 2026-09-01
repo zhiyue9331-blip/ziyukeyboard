@@ -19,3 +19,11 @@ Apache License 2.0 发布；其 README 说明原始拆字数据来自开放词�
 
 生成过程只做格式转换、读音映射、去重与索引键生成，可使用
 `tools/generate_dictionaries.ps1` 重现。
+
+## librime 及原生依赖
+
+Android 原生解码器使用 [librime 1.16.1](https://github.com/rime/librime)，
+按 BSD 3-Clause License 使用。静态链接的依赖包括 Boost（Boost Software
+License 1.0）、LevelDB（BSD 3-Clause）、marisa-trie（BSD 2-Clause）、
+OpenCC（Apache License 2.0）和 yaml-cpp（MIT）。相应完整许可文本见
+`third_party_licenses`。项目没有复制或链接 Trime 的 GPL 界面实现。

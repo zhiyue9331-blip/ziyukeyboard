@@ -9,6 +9,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.List;
 
 public class AssemblyEngineTest {
     private static final String DICTIONARY = """
@@ -31,6 +32,19 @@ public class AssemblyEngineTest {
                 .search("wangyv").get(0);
         assertEquals("珏", candidate.text());
         assertEquals("jué", candidate.pinyin());
+    }
+
+    @Test
+    public void decoratesNativeAssemblyCandidateWithPronunciationAndComponents() {
+        AssemblyEngine engine = new AssemblyEngine(new StringReader(DICTIONARY));
+        Candidate nativeCandidate = new Candidate("旮", "jiuri", 100,
+                Candidate.Source.RIME_ASSEMBLY);
+
+        Candidate decorated = engine.decorateRimeCandidates(List.of(nativeCandidate)).get(0);
+
+        assertEquals("gā", decorated.pinyin());
+        assertEquals("九+日", decorated.annotation());
+        assertEquals(Candidate.Source.RIME_ASSEMBLY, decorated.source());
     }
 
     @Test

@@ -18,6 +18,7 @@ import java.util.Set;
 /** Finds a Han character from the spoken names of its visible components. */
 public final class AssemblyEngine {
     private final Map<String, List<Entry>> prefixIndex = new HashMap<>();
+    private final Map<String, Entry> displayEntries = new HashMap<>();
 
     public AssemblyEngine(Context context) {
         this(context, true);
@@ -51,6 +52,10 @@ public final class AssemblyEngine {
     }
 
     private void addEntry(Entry entry) {
+        Entry current = displayEntries.get(entry.text);
+        if (current == null || entry.frequency > current.frequency) {
+            displayEntries.put(entry.text, entry);
+        }
         for (int length = 1; length <= Math.min(2, entry.key.length()); length++) {
             String prefix = entry.key.substring(0, length);
             List<Entry> bucket = prefixIndex.get(prefix);
@@ -60,6 +65,20 @@ public final class AssemblyEngine {
             }
             bucket.add(entry);
         }
+    }
+
+    List<Candidate> decorateRimeCandidates(List<Candidate> candidates) {
+        List<Candidate> result = new ArrayList<>();
+        for (Candidate candidate : candidates) {
+            Entry entry = displayEntries.get(candidate.text());
+            if (entry == null) {
+                result.add(candidate);
+            } else {
+                result.add(new Candidate(candidate.text(), entry.pinyin, candidate.score(),
+                        Candidate.Source.RIME_ASSEMBLY, entry.components));
+            }
+        }
+        return result;
     }
 
     private static Reader openAsset(Context context, String name) {

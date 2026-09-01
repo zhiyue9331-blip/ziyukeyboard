@@ -12,3 +12,4 @@ app/build/
 .adb-home/
 dist/
 .downloads/
+.native-build/

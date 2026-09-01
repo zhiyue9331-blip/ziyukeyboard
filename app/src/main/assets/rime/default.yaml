@@ -1,0 +1,9 @@
+config_version: "1.0"
+
+schema_list:
+  - schema: ziyu_pinyin
+  - schema: ziyu_pinyin_fuzzy
+  - schema: ziyu_assembly
+
+menu:
+  page_size: 24

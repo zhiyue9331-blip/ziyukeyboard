@@ -1,13 +1,13 @@
 # 字语输入法
 
-字语输入法是一个原生 Android 中文输入法 MVP，重点探索“部件读音拼字”和候选读音反馈。项目使用 Java 和 Android `InputMethodService`，最低支持 Android 6.0（API 23）。
+字语输入法是一个原生 Android 中文输入法，重点探索“部件读音拼字”和候选读音反馈。项目使用 Java、Android `InputMethodService` 与 BSD-3-Clause 许可的 librime 1.16.1，最低支持 Android 6.0（API 23）。
 
 ## 已实现功能
 
-- 26 键拼音输入、简拼和候选前缀匹配，内置 6.5 万余条离线候选
+- 26 键拼音输入、整句候选、简拼和用户词频学习；librime 未就绪时自动使用 6.5 万余条 Java 离线候选
 - 常见声母、模糊音及前后鼻音匹配
-- 拼字输入：内置 1.1 万余种部件组合，并保留 `jiuri → 旮（gā，九+日）`、`wangyu/wangyv → 珏（jué，王+玉）`
-- 中文数字墨水手写识别，候选显示拼音，多音字显示多个读音
+- 拼字输入：1.1 万余种部件组合接入 Rime 表格引擎，并保留 `jiuri → 旮（gā，九+日）`、`wangyu/wangyv → 珏（jué，王+玉）`
+- 中文数字墨水手写识别；只有生僻字显示拼音，常用字候选保持简洁
 - 拼音、拼字、手写、英文、数字和符号模式即时切换
 - 顶部紧凑候选栏、轻量模式栏以及主键盘逗号/句号快捷键
 - 五行常用符号面板，可直接输入中英文标点、括号和网络符号
@@ -22,6 +22,7 @@
 
 - JDK 17
 - Android SDK 36
+- Android NDK 28.0.13004108（仅重新编译 librime 时需要）
 - Android Gradle Plugin 9.3.0
 - Gradle 9.5.0（Wrapper 已包含）
 
@@ -61,7 +62,15 @@ subst R: /D
 
 ## 词库扩展
 
-项目同时加载人工校正词条和大规模离线词库。拼音数据位于 `app/src/main/assets/pinyin_dictionary.tsv` 与 `pinyin_rime.tsv`；拼字数据位于 `assembly_dictionary.tsv` 与 `assembly_full.tsv`。生成命令及上游许可见 `tools/generate_dictionaries.ps1` 和 `THIRD_PARTY_NOTICES.md`。
+项目同时加载人工校正词条和大规模离线词库。Rime 配方与词典位于 `app/src/main/assets/rime`；Java 后备拼音数据位于 `pinyin_dictionary.tsv` 与 `pinyin_rime.tsv`，拼字数据位于 `assembly_dictionary.tsv` 与 `assembly_full.tsv`。生成命令及上游许可见 `tools/generate_dictionaries.ps1` 和 `THIRD_PARTY_NOTICES.md`。
+
+## 开源输入引擎
+
+主解码器采用 librime 1.16.1，通过项目自有 JNI 薄封装接入，未复制 Trime 的 GPL 界面代码。首次启动在后台部署 Rime 数据，部署过程中仍可使用轻量 Java 后备引擎，因此不会阻塞输入法唤醒。四种 ABI 的预编译库位于 `app/src/main/jniLibs`。如需从上游源码重建，可准备 librime、Boost、Android NDK 与 CMake 后执行：
+
+```powershell
+.\tools\build_librime_android.ps1 -Abi arm64-v8a
+```
 
 ## 皮肤包格式
 

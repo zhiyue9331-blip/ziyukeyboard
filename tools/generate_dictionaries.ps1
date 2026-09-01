@@ -86,6 +86,39 @@ foreach ($line in [IO.File]::ReadLines($ChaiziData, [Text.Encoding]::UTF8)) {
 }
 
 [IO.File]::WriteAllLines((Join-Path $AssetDirectory 'assembly_full.tsv'), $assemblyRows, $utf8)
+
+$rimeAssemblyRows = New-Object 'System.Collections.Generic.List[string]'
+$rimeAssemblyRows.Add('# Rime dictionary')
+$rimeAssemblyRows.Add('# encoding: utf-8')
+$rimeAssemblyRows.Add('---')
+$rimeAssemblyRows.Add('name: ziyu_assembly')
+$rimeAssemblyRows.Add('version: "1.0"')
+$rimeAssemblyRows.Add('sort: by_weight')
+$rimeAssemblyRows.Add('columns:')
+$rimeAssemblyRows.Add('  - text')
+$rimeAssemblyRows.Add('  - code')
+$rimeAssemblyRows.Add('  - weight')
+$rimeAssemblyRows.Add('...')
+$curatedAssembly = Join-Path $AssetDirectory 'assembly_dictionary.tsv'
+if (Test-Path -LiteralPath $curatedAssembly) {
+    foreach ($line in [IO.File]::ReadLines($curatedAssembly, [Text.Encoding]::UTF8)) {
+        if ($line.StartsWith('#') -or [string]::IsNullOrWhiteSpace($line)) { continue }
+        $fields = $line.Split("`t")
+        if ($fields.Count -lt 5) { continue }
+        $weight = [int]$fields[4] + 1000000
+        foreach ($alias in $fields[0].Split(',')) {
+            $rimeAssemblyRows.Add("$($fields[1])`t$alias`t$weight")
+        }
+    }
+}
+for ($index = 1; $index -lt $assemblyRows.Count; $index++) {
+    $fields = $assemblyRows[$index].Split("`t")
+    $rimeAssemblyRows.Add("$($fields[1])`t$($fields[0])`t$($fields[4])")
+}
+$rimeDirectory = Join-Path $AssetDirectory 'rime'
+New-Item -ItemType Directory -Force -Path $rimeDirectory | Out-Null
+[IO.File]::WriteAllLines((Join-Path $rimeDirectory 'ziyu_assembly.dict.yaml'),
+    $rimeAssemblyRows, $utf8)
 Write-Output "Pinyin rows: $($rimeRows.Count - 1)"
 Write-Output "Assembly rows: $($assemblyRows.Count - 1)"
 Write-Output "Common characters: $($commonCharacters.Count)"
