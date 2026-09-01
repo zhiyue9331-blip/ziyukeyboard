@@ -42,6 +42,19 @@ foreach ($line in [IO.File]::ReadLines($RimeDictionary, [Text.Encoding]::UTF8)) 
 
 [IO.File]::WriteAllLines((Join-Path $AssetDirectory 'pinyin_rime.tsv'), $rimeRows, $utf8)
 
+$commonCharacters = New-Object 'System.Collections.Generic.List[string]'
+$gb2312 = [Text.Encoding]::GetEncoding(936)
+for ($lead = 0xB0; $lead -le 0xD7; $lead++) {
+    $lastTrail = if ($lead -eq 0xD7) { 0xF9 } else { 0xFE }
+    for ($trail = 0xA1; $trail -le $lastTrail; $trail++) {
+        $character = $gb2312.GetString([byte[]]@($lead, $trail))
+        if ($character -ne [char]0xFFFD -and $character -ne '?') {
+            $commonCharacters.Add($character)
+        }
+    }
+}
+[IO.File]::WriteAllLines((Join-Path $AssetDirectory 'common_hanzi.txt'), $commonCharacters, $utf8)
+
 $assemblyRows = New-Object 'System.Collections.Generic.List[string]'
 $assemblyRows.Add('# generated from hanzi_chaizi simplified data; see THIRD_PARTY_NOTICES.md')
 $seen = New-Object 'System.Collections.Generic.HashSet[string]'
@@ -75,3 +88,4 @@ foreach ($line in [IO.File]::ReadLines($ChaiziData, [Text.Encoding]::UTF8)) {
 [IO.File]::WriteAllLines((Join-Path $AssetDirectory 'assembly_full.tsv'), $assemblyRows, $utf8)
 Write-Output "Pinyin rows: $($rimeRows.Count - 1)"
 Write-Output "Assembly rows: $($assemblyRows.Count - 1)"
+Write-Output "Common characters: $($commonCharacters.Count)"

@@ -35,6 +35,7 @@ public final class SimpleKeyboardView extends LinearLayout {
     private final TextView compositionView;
     private final LinearLayout candidateRow;
     private final LinearLayout keyboardArea;
+    private final PronunciationDisplayPolicy pronunciationPolicy;
     private final LinearLayout handwritingArea;
     private final HandwritingPad handwritingPad;
     private InputMode mode = InputMode.PINYIN;
@@ -42,6 +43,7 @@ public final class SimpleKeyboardView extends LinearLayout {
 
     public SimpleKeyboardView(Context context) {
         super(context);
+        pronunciationPolicy = new PronunciationDisplayPolicy(context);
         preferences = ImePreferences.get(context);
         setOrientation(VERTICAL);
         setPadding(dp(3), dp(3), dp(3), dp(4));
@@ -227,8 +229,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         compositionView.setText(composition.isEmpty() ? modeTitle() : composition);
         candidateRow.removeAllViews();
         for (Candidate candidate : candidates) {
-            String detail = candidate.annotation().isEmpty() ? "" : " 〔" + candidate.annotation() + "〕";
-            Button button = createKey(candidate.text() + "  " + candidate.pinyin() + detail);
+            Button button = createKey(pronunciationPolicy.labelFor(candidate));
             button.setTextSize(14);
             button.setSingleLine(true);
             button.setOnClickListener(view -> {
