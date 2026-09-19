@@ -309,7 +309,7 @@ public final class HanziInputMethodService extends InputMethodService
         String remaining = mode == SimpleKeyboardView.InputMode.PINYIN
                 ? remainingPinyin(composition.toString(), candidate)
                 : "";
-        if ((candidate.source() == Candidate.Source.RIME
+        if (learningAllowed() && (candidate.source() == Candidate.Source.RIME
                 || candidate.source() == Candidate.Source.RIME_ASSEMBLY)
                 && rimeEngine != null) {
             rimeEngine.recordSelection(candidate);
@@ -368,8 +368,7 @@ public final class HanziInputMethodService extends InputMethodService
 
     private static void deleteOneCodePoint(InputConnection connection) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            connection.deleteSurroundingTextInCodePoints(1, 0);
-            return;
+            if (connection.deleteSurroundingTextInCodePoints(1, 0)) return;
         }
         CharSequence beforeCursor = connection.getTextBeforeCursor(2, 0);
         int codeUnits = beforeCursor != null

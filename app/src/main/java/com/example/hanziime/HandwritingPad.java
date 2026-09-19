@@ -42,9 +42,9 @@ public final class HandwritingPad extends View {
     public boolean onTouchEvent(MotionEvent event) {
         float x = event.getX();
         float y = event.getY();
-        long timestamp = System.currentTimeMillis();
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
+                long timestamp = event.getEventTime();
                 activePath = new Path();
                 activePath.moveTo(x, y);
                 strokeBuilder = Ink.Stroke.builder();
@@ -58,14 +58,14 @@ public final class HandwritingPad extends View {
                         addPoint(event.getHistoricalX(i), event.getHistoricalY(i),
                                 event.getHistoricalEventTime(i));
                     }
-                    addPoint(x, y, timestamp);
+                    addPoint(x, y, event.getEventTime());
                     invalidate();
                 }
                 return true;
             }
             case MotionEvent.ACTION_UP -> {
                 if (activePath != null && strokeBuilder != null) {
-                    addPoint(x, y, timestamp);
+                    addPoint(x, y, event.getEventTime());
                     paths.add(activePath);
                     inkBuilder.addStroke(strokeBuilder.build());
                     activePath = null;
