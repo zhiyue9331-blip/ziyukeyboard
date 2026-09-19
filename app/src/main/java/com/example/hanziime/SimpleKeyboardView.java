@@ -1,5 +1,6 @@
 package com.example.hanziime;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -69,7 +70,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         addModeButton(toolbar, "123", InputMode.NUMBER);
         addModeButton(toolbar, "符号", InputMode.SYMBOL);
 
-        compositionView.setText("中文 · 26键");
+        compositionView.setText(R.string.keyboard_pinyin_title);
         compositionView.setTextColor(accentColor());
         compositionView.setTextSize(14);
         compositionView.setGravity(Gravity.CENTER_VERTICAL);
@@ -288,6 +289,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         return row;
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     private Button createKey(String label) {
         Button key = new Button(getContext());
         key.setText(label);

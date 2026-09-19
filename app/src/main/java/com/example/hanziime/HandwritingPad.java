@@ -54,27 +54,40 @@ public final class HandwritingPad extends View {
             }
             case MotionEvent.ACTION_MOVE -> {
                 if (activePath != null && strokeBuilder != null) {
-                    activePath.lineTo(x, y);
-                    strokeBuilder.addPoint(Ink.Point.create(x, y, timestamp));
+                    for (int i = 0; i < event.getHistorySize(); i++) {
+                        addPoint(event.getHistoricalX(i), event.getHistoricalY(i),
+                                event.getHistoricalEventTime(i));
+                    }
+                    addPoint(x, y, timestamp);
                     invalidate();
                 }
-                performClick();
                 return true;
             }
             case MotionEvent.ACTION_UP -> {
                 if (activePath != null && strokeBuilder != null) {
-                    activePath.lineTo(x, y);
-                    strokeBuilder.addPoint(Ink.Point.create(x, y, timestamp));
+                    addPoint(x, y, timestamp);
                     paths.add(activePath);
                     inkBuilder.addStroke(strokeBuilder.build());
                     activePath = null;
                     strokeBuilder = null;
                     invalidate();
                 }
+                performClick();
+                return true;
+            }
+            case MotionEvent.ACTION_CANCEL -> {
+                activePath = null;
+                strokeBuilder = null;
+                invalidate();
                 return true;
             }
             default -> { return super.onTouchEvent(event); }
         }
+    }
+
+    private void addPoint(float x, float y, long timestamp) {
+        activePath.lineTo(x, y);
+        strokeBuilder.addPoint(Ink.Point.create(x, y, timestamp));
     }
 
     @Override

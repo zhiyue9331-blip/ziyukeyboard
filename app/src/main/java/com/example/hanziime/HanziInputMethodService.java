@@ -2,6 +2,7 @@ package com.example.hanziime;
 
 import android.inputmethodservice.InputMethodService;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
@@ -29,6 +30,8 @@ import java.util.concurrent.Executors;
 
 public final class HanziInputMethodService extends InputMethodService
         implements SimpleKeyboardView.Listener {
+    // Added in API 26, but it is a plain EditorInfo bit and is safe to honor on older devices.
+    private static final int IME_FLAG_NO_PERSONALIZED_LEARNING = 0x01000000;
     private final StringBuilder composition = new StringBuilder();
     private volatile PinyinEngine pinyinEngine;
     private volatile AssemblyEngine assemblyEngine;
@@ -101,6 +104,9 @@ public final class HanziInputMethodService extends InputMethodService
     public View onCreateInputView() {
         keyboard = new SimpleKeyboardView(this);
         keyboard.setListener(this);
+        // Input views can be recreated while the service remains alive. Keep the new view in
+        // sync with the service instead of silently falling back to the pinyin layout.
+        keyboard.setMode(mode);
         return keyboard;
     }
 
@@ -188,7 +194,7 @@ public final class HanziInputMethodService extends InputMethodService
         }
         InputConnection connection = getCurrentInputConnection();
         if (connection != null) {
-            connection.deleteSurroundingText(1, 0);
+            deleteOneCodePoint(connection);
         }
     }
 
@@ -204,11 +210,9 @@ public final class HanziInputMethodService extends InputMethodService
             return;
         }
         EditorInfo info = getCurrentInputEditorInfo();
-        int action = info == null
-                ? EditorInfo.IME_ACTION_NONE
-                : info.imeOptions & EditorInfo.IME_MASK_ACTION;
-        if (action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
-            connection.performEditorAction(action);
+        int imeOptions = info == null ? EditorInfo.IME_ACTION_NONE : info.imeOptions;
+        if (shouldPerformEditorAction(imeOptions)) {
+            connection.performEditorAction(imeOptions & EditorInfo.IME_MASK_ACTION);
         } else {
             sendDownUpKeyEvents(KeyEvent.KEYCODE_ENTER);
         }
@@ -217,10 +221,26 @@ public final class HanziInputMethodService extends InputMethodService
     @Override
     public void onStartInput(android.view.inputmethod.EditorInfo attribute, boolean restarting) {
         super.onStartInput(attribute, restarting);
+        clearSessionState();
+        privateInput = attribute != null && (isPrivateInput(attribute.inputType)
+                || disablesPersonalizedLearning(attribute.imeOptions));
+    }
+
+    @Override
+    public void onFinishInput() {
+        clearSessionState();
+        privateInput = false;
+        super.onFinishInput();
+    }
+
+    private void clearSessionState() {
         composition.setLength(0);
         candidates = java.util.List.of();
         previousCommitted = "";
-        privateInput = isPrivateInput(attribute == null ? 0 : attribute.inputType);
+        if (keyboard != null) {
+            keyboard.showCandidates("", candidates);
+            keyboard.clearHandwriting();
+        }
     }
 
     private void refreshCandidates() {
@@ -323,12 +343,42 @@ public final class HanziInputMethodService extends InputMethodService
         return !privateInput && ImePreferences.enabled(preferences, ImePreferences.LEARNING);
     }
 
-    private static boolean isPrivateInput(int inputType) {
+    static boolean isPrivateInput(int inputType) {
+        int inputClass = inputType & InputType.TYPE_MASK_CLASS;
         int variation = inputType & InputType.TYPE_MASK_VARIATION;
-        return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD
-                || variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
-                || variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD;
+        if (inputClass == InputType.TYPE_CLASS_TEXT) {
+            return variation == InputType.TYPE_TEXT_VARIATION_PASSWORD
+                    || variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                    || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD;
+        }
+        return inputClass == InputType.TYPE_CLASS_NUMBER
+                && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD;
+    }
+
+    static boolean shouldPerformEditorAction(int imeOptions) {
+        int action = imeOptions & EditorInfo.IME_MASK_ACTION;
+        return (imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0
+                && action != EditorInfo.IME_ACTION_NONE
+                && action != EditorInfo.IME_ACTION_UNSPECIFIED;
+    }
+
+    static boolean disablesPersonalizedLearning(int imeOptions) {
+        return (imeOptions & IME_FLAG_NO_PERSONALIZED_LEARNING) != 0;
+    }
+
+    private static void deleteOneCodePoint(InputConnection connection) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            connection.deleteSurroundingTextInCodePoints(1, 0);
+            return;
+        }
+        CharSequence beforeCursor = connection.getTextBeforeCursor(2, 0);
+        int codeUnits = beforeCursor != null
+                && beforeCursor.length() >= 2
+                && Character.isSurrogatePair(
+                        beforeCursor.charAt(beforeCursor.length() - 2),
+                        beforeCursor.charAt(beforeCursor.length() - 1))
+                ? 2 : 1;
+        connection.deleteSurroundingText(codeUnits, 0);
     }
 
     private void commitDirect(String text) {

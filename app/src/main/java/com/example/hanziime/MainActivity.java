@@ -1,6 +1,7 @@
 package com.example.hanziime;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -26,11 +27,13 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 public final class MainActivity extends Activity {
     private static final int SIDE_PADDING_DP = 24;
     private static final int REQUEST_IMPORT_SKIN = 701;
     private static final int REQUEST_EXPORT_SKIN = 702;
+    private static final int MAX_SKIN_FILE_CHARS = 64 * 1024;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -194,10 +197,15 @@ public final class MainActivity extends Activity {
 
         Button clearLearning = actionButton(0);
         clearLearning.setText("清空本地学习数据");
-        clearLearning.setOnClickListener(view -> {
-            new UserLexiconStore(this).clearLearning();
-            Toast.makeText(this, "本地词频和自定义词条已清空", Toast.LENGTH_SHORT).show();
-        });
+        clearLearning.setOnClickListener(view -> new AlertDialog.Builder(this)
+                .setTitle(R.string.clear_learning_title)
+                .setMessage(R.string.clear_learning_message)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.clear_learning_confirm, (dialog, which) -> {
+                    new UserLexiconStore(this).clearLearning();
+                    Toast.makeText(this, R.string.clear_learning_done, Toast.LENGTH_SHORT).show();
+                })
+                .show());
         root.addView(clearLearning, matchWrap(dp(24)));
     }
 
@@ -242,11 +250,19 @@ public final class MainActivity extends Activity {
                      requireStream(input), StandardCharsets.UTF_8))) {
             StringBuilder json = new StringBuilder();
             String line;
-            while ((line = reader.readLine()) != null) json.append(line);
+            while ((line = reader.readLine()) != null) {
+                if (json.length() + line.length() > MAX_SKIN_FILE_CHARS) {
+                    throw new IOException("皮肤文件过大");
+                }
+                json.append(line);
+            }
             skin = new JSONObject(json.toString());
         }
         if (!"ziyu-ime-skin".equals(skin.optString("format"))) {
             throw new JSONException("不是字语输入法皮肤包");
+        }
+        if (skin.optInt("version", -1) != 1) {
+            throw new JSONException("不支持的皮肤包版本");
         }
         String panel = validatedSkinColor(skin, "panelColor", "#DCE2E6");
         String key = validatedSkinColor(skin, "keyColor", "#FFFFFF");
@@ -255,6 +271,9 @@ public final class MainActivity extends Activity {
         int radius = Math.max(0, Math.min(24, skin.optInt("cornerRadius", 7)));
         String name = skin.optString("name", "导入皮肤").trim();
         if (name.isEmpty()) name = "导入皮肤";
+        if (name.codePointCount(0, name.length()) > 40) {
+            name = name.substring(0, name.offsetByCodePoints(0, 40));
+        }
         ImePreferences.get(this).edit()
                 .putString(ImePreferences.THEME, "custom")
                 .putString(ImePreferences.CUSTOM_SKIN_NAME, name)
@@ -316,15 +335,16 @@ public final class MainActivity extends Activity {
                     ImePreferences.CUSTOM_SKIN_NAME, "自定义");
             default -> "纸白";
         };
-        button.setText("输入法皮肤：" + name + "（点击切换）");
+        button.setText(getString(R.string.theme_button_label, name));
     }
 
     private String normalizeColor(String raw, String fallback) {
         String value = raw.trim().isEmpty() ? fallback : raw.trim();
         if (!value.startsWith("#")) value = "#" + value;
+        if (!value.matches("#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})")) return null;
         try {
             Color.parseColor(value);
-            return value;
+            return value.toUpperCase(Locale.ROOT);
         } catch (IllegalArgumentException ignored) {
             return null;
         }

@@ -10,6 +10,7 @@ import java.util.Map;
 
 /** Private, on-device candidate frequency and expression model. */
 public final class UserLexiconStore {
+    private static final int CUSTOM_ENTRY_PRIORITY = 10_000_000;
     private static final String FREQUENCY = "frequency.";
     private static final String PRONUNCIATION = "pronunciation.";
     private static final String BIGRAM = "bigram.";
@@ -82,6 +83,12 @@ public final class UserLexiconStore {
     }
 
     private int learnedScore(Candidate candidate) {
-        return candidate.score() + data.getInt(FREQUENCY + candidate.text(), 0) * 250;
+        return candidate.score() + rankingBonus(candidate)
+                + data.getInt(FREQUENCY + candidate.text(), 0) * 250;
+    }
+
+    static int rankingBonus(Candidate candidate) {
+        return candidate.source() == Candidate.Source.USER
+                && "自定义".equals(candidate.annotation()) ? CUSTOM_ENTRY_PRIORITY : 0;
     }
 }
