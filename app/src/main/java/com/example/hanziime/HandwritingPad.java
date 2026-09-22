@@ -42,9 +42,9 @@ public final class HandwritingPad extends View {
     public boolean onTouchEvent(MotionEvent event) {
         float x = event.getX();
         float y = event.getY();
-        long timestamp = System.currentTimeMillis();
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN -> {
+                long timestamp = event.getEventTime();
                 activePath = new Path();
                 activePath.moveTo(x, y);
                 strokeBuilder = Ink.Stroke.builder();
@@ -54,27 +54,40 @@ public final class HandwritingPad extends View {
             }
             case MotionEvent.ACTION_MOVE -> {
                 if (activePath != null && strokeBuilder != null) {
-                    activePath.lineTo(x, y);
-                    strokeBuilder.addPoint(Ink.Point.create(x, y, timestamp));
+                    for (int i = 0; i < event.getHistorySize(); i++) {
+                        addPoint(event.getHistoricalX(i), event.getHistoricalY(i),
+                                event.getHistoricalEventTime(i));
+                    }
+                    addPoint(x, y, event.getEventTime());
                     invalidate();
                 }
-                performClick();
                 return true;
             }
             case MotionEvent.ACTION_UP -> {
                 if (activePath != null && strokeBuilder != null) {
-                    activePath.lineTo(x, y);
-                    strokeBuilder.addPoint(Ink.Point.create(x, y, timestamp));
+                    addPoint(x, y, event.getEventTime());
                     paths.add(activePath);
                     inkBuilder.addStroke(strokeBuilder.build());
                     activePath = null;
                     strokeBuilder = null;
                     invalidate();
                 }
+                performClick();
+                return true;
+            }
+            case MotionEvent.ACTION_CANCEL -> {
+                activePath = null;
+                strokeBuilder = null;
+                invalidate();
                 return true;
             }
             default -> { return super.onTouchEvent(event); }
         }
+    }
+
+    private void addPoint(float x, float y, long timestamp) {
+        activePath.lineTo(x, y);
+        strokeBuilder.addPoint(Ink.Point.create(x, y, timestamp));
     }
 
     @Override

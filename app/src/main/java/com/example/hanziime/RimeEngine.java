@@ -64,7 +64,11 @@ final class RimeEngine implements AutoCloseable {
             Candidate candidate = new Candidate(text, pronunciation,
                     100_000 - index / 3, source, "", consumedLength);
             result.add(candidate);
-            candidateIndexes.put(text, index / 3);
+            // The menu can contain the same text more than once with different comments. The
+            // UI keeps the first occurrence, so selection must resolve to that same entry.
+            if (!candidateIndexes.containsKey(text)) {
+                candidateIndexes.put(text, index / 3);
+            }
         }
         return result;
     }
