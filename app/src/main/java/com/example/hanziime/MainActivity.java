@@ -362,7 +362,9 @@ public final class MainActivity extends Activity {
 
     private Button actionButton(int textResource) {
         Button button = new Button(this);
-        button.setText(textResource);
+        if (textResource != 0) {
+            button.setText(textResource);
+        }
         button.setTextSize(16);
         button.setAllCaps(false);
         return button;
