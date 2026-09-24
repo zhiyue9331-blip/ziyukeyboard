@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Set;
 
 public final class PinyinEngine {
-    private static final int MAX_CANDIDATES = 24;
+    private static final int MAX_CANDIDATES = 256;
     private final Map<String, List<Entry>> normalFullIndex = new HashMap<>();
     private final Map<String, List<Entry>> fuzzyFullIndex = new HashMap<>();
     private final Map<String, List<Entry>> normalInitialIndex = new HashMap<>();
@@ -118,7 +118,7 @@ public final class PinyinEngine {
     }
 
     private static int matchQuality(String query, String full, String initials) {
-        if (full.equals(query)) return 10_000;
+        if (full.equals(query)) return 2_000_000;
         if (full.startsWith(query)) return 7_000 - (full.length() - query.length()) * 10;
         if (query.length() >= 2 && initials.equals(query)) return 5_000;
         if (query.length() >= 2 && initials.startsWith(query)) return 3_000;

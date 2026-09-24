@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
 
+import com.google.mlkit.common.MlKit;
 import com.google.mlkit.common.MlKitException;
 import com.google.mlkit.common.model.DownloadConditions;
 import com.google.mlkit.common.model.RemoteModelManager;
@@ -45,6 +46,7 @@ public final class HanziInputMethodService extends InputMethodService
     private DigitalInkRecognitionModel handwritingModel;
     private DigitalInkRecognizer handwritingRecognizer;
     private boolean handwritingModelReady;
+    private boolean handwritingModelLoading;
     private SharedPreferences preferences;
     private UserLexiconStore userLexicon;
     private boolean privateInput;
@@ -58,7 +60,6 @@ public final class HanziInputMethodService extends InputMethodService
         assemblyEngine = new AssemblyEngine(this, false);
         preferences = ImePreferences.get(this);
         userLexicon = new UserLexiconStore(this);
-        initializeHandwritingRecognizer();
         loadFullDictionariesInBackground();
     }
 
@@ -146,13 +147,13 @@ public final class HanziInputMethodService extends InputMethodService
     @Override
     public void onRecognizeHandwriting(Ink ink) {
         if (!handwritingModelReady || handwritingRecognizer == null) {
-            if (keyboard != null) keyboard.showHandwritingStatus("中文手写模型正在准备，请稍后");
             ensureHandwritingModel();
             return;
         }
         if (keyboard != null) keyboard.showHandwritingStatus("正在识别…");
         handwritingRecognizer.recognize(ink)
                 .addOnSuccessListener(result -> {
+                    if (destroyed || mode != SimpleKeyboardView.InputMode.HANDWRITING) return;
                     ListBuilder builder = new ListBuilder();
                     int count = Math.min(12, result.getCandidates().size());
                     for (int i = 0; i < count; i++) {
@@ -167,7 +168,8 @@ public final class HanziInputMethodService extends InputMethodService
                     }
                 })
                 .addOnFailureListener(error -> {
-                    if (keyboard != null) keyboard.showHandwritingStatus("识别失败，请重试");
+                    if (!destroyed && keyboard != null)
+                        keyboard.showHandwritingStatus("识别失败，请重试");
                 });
     }
 
@@ -263,7 +265,7 @@ public final class HanziInputMethodService extends InputMethodService
                     pinyinEngine.search(composition.toString(), fuzzy));
         }
         if (learningAllowed()) candidates = userLexicon.rerank(candidates);
-        if (candidates.size() > 24) candidates = new ArrayList<>(candidates.subList(0, 24));
+        if (candidates.size() > 256) candidates = new ArrayList<>(candidates.subList(0, 256));
         if (keyboard != null) keyboard.showCandidates(composition.toString(), candidates);
     }
 
@@ -385,44 +387,62 @@ public final class HanziInputMethodService extends InputMethodService
         if (connection != null) connection.commitText(text, 1);
     }
 
-    private void initializeHandwritingRecognizer() {
+    private void ensureHandwritingModel() {
+        if (handwritingModelReady) {
+            if (keyboard != null) keyboard.showHandwritingStatus("请在下方书写汉字");
+            return;
+        }
+        if (handwritingModelLoading) return;
         try {
-            DigitalInkRecognitionModelIdentifier identifier =
-                    DigitalInkRecognitionModelIdentifier.fromLanguageTag("zh-Hans-CN");
-            if (identifier == null) return;
-            handwritingModel = DigitalInkRecognitionModel.builder(identifier).build();
-            handwritingRecognizer = DigitalInkRecognition.getClient(
-                    DigitalInkRecognizerOptions.builder(handwritingModel).build());
-        } catch (MlKitException ignored) {
-            handwritingModel = null;
-            handwritingRecognizer = null;
+            if (handwritingModel == null) {
+                // Keep ML Kit out of the input method's startup path.
+                MlKit.initialize(getApplicationContext());
+                DigitalInkRecognitionModelIdentifier identifier =
+                        DigitalInkRecognitionModelIdentifier.fromLanguageTag("zh-Hans-CN");
+                if (identifier == null) {
+                    if (keyboard != null) keyboard.showHandwritingStatus("不支持中文手写模型");
+                    return;
+                }
+                handwritingModel = DigitalInkRecognitionModel.builder(identifier).build();
+            }
+            if (handwritingRecognizer == null) {
+                handwritingRecognizer = DigitalInkRecognition.getClient(
+                        DigitalInkRecognizerOptions.builder(handwritingModel).build());
+            }
+            handwritingModelLoading = true;
+            if (keyboard != null) keyboard.showHandwritingStatus("正在检查中文手写模型…");
+            RemoteModelManager manager = RemoteModelManager.getInstance();
+            manager.isModelDownloaded(handwritingModel)
+                    .addOnSuccessListener(downloaded -> {
+                        if (destroyed) return;
+                        if (downloaded) {
+                            handwritingModelLoading = false;
+                            handwritingModelReady = true;
+                            if (keyboard != null) keyboard.showHandwritingStatus("请在下方书写汉字");
+                        } else {
+                            if (keyboard != null)
+                                keyboard.showHandwritingStatus("首次使用：正在下载中文手写模型…");
+                            manager.download(handwritingModel, new DownloadConditions.Builder().build())
+                                    .addOnSuccessListener(unused -> {
+                                        if (destroyed) return;
+                                        handwritingModelLoading = false;
+                                        handwritingModelReady = true;
+                                        if (keyboard != null)
+                                            keyboard.showHandwritingStatus("模型就绪，请书写汉字");
+                                    })
+                                    .addOnFailureListener(error -> showHandwritingModelError());
+                        }
+                    })
+                    .addOnFailureListener(error -> showHandwritingModelError());
+        } catch (MlKitException | RuntimeException | LinkageError error) {
+            showHandwritingModelError();
         }
     }
 
-    private void ensureHandwritingModel() {
-        if (handwritingModel == null || handwritingModelReady) return;
-        if (keyboard != null) keyboard.showHandwritingStatus("正在检查中文手写模型…");
-        RemoteModelManager manager = RemoteModelManager.getInstance();
-        manager.isModelDownloaded(handwritingModel)
-                .addOnSuccessListener(downloaded -> {
-                    if (downloaded) {
-                        handwritingModelReady = true;
-                        if (keyboard != null) keyboard.showHandwritingStatus("请在下方书写汉字");
-                    } else {
-                        if (keyboard != null) keyboard.showHandwritingStatus("首次使用：正在下载中文手写模型…");
-                        manager.download(handwritingModel, new DownloadConditions.Builder().build())
-                                .addOnSuccessListener(unused -> {
-                                    handwritingModelReady = true;
-                                    if (keyboard != null) keyboard.showHandwritingStatus("模型就绪，请书写汉字");
-                                })
-                                .addOnFailureListener(error -> {
-                                    if (keyboard != null) keyboard.showHandwritingStatus("模型下载失败，请检查网络");
-                                });
-                    }
-                })
-                .addOnFailureListener(error -> {
-                    if (keyboard != null) keyboard.showHandwritingStatus("无法检查手写模型");
-                });
+    private void showHandwritingModelError() {
+        handwritingModelLoading = false;
+        if (!destroyed && keyboard != null)
+            keyboard.showHandwritingStatus("手写模型暂不可用，请检查网络后重试");
     }
 
     private static final class ListBuilder {
