@@ -62,6 +62,15 @@ public class PinyinEngineTest {
         assertTrue(morning.stream().anyMatch(candidate -> candidate.text().equals("早上好")));
     }
 
+    @Test
+    public void rareSingleCharactersRemainReachable() throws IOException {
+        PinyinEngine engine = new PinyinEngine(new FileReader(asset("pinyin_rime.tsv")));
+        assertTrue(engine.search("fu", false).stream()
+                .anyMatch(candidate -> candidate.text().equals("祓")));
+        assertTrue(engine.search("si", false).stream()
+                .anyMatch(candidate -> candidate.text().equals("巳")));
+    }
+
     private static File asset(String name) {
         File direct = new File("src/main/assets", name);
         return direct.isFile() ? direct : new File("app/src/main/assets", name);

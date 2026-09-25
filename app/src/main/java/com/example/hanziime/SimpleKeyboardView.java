@@ -35,6 +35,12 @@ public final class SimpleKeyboardView extends LinearLayout {
     private Listener listener;
     private final TextView compositionView;
     private final LinearLayout candidateRow;
+    private final HorizontalScrollView candidateScroller;
+    private final Button previousCandidates;
+    private final Button nextCandidates;
+    private java.util.List<Candidate> visibleCandidates = java.util.List.of();
+    private int candidatePage;
+    private static final int CANDIDATES_PER_PAGE = 24;
     private final LinearLayout keyboardArea;
     private final PronunciationDisplayPolicy pronunciationPolicy;
     private final LinearLayout handwritingArea;
@@ -51,6 +57,9 @@ public final class SimpleKeyboardView extends LinearLayout {
         setBackgroundColor(panelColor());
         compositionView = new TextView(context);
         candidateRow = new LinearLayout(context);
+        candidateScroller = new HorizontalScrollView(context);
+        previousCandidates = createKey("‹");
+        nextCandidates = createKey("›");
         keyboardArea = new LinearLayout(context);
         handwritingArea = new LinearLayout(context);
         handwritingPad = new HandwritingPad(context);
@@ -77,15 +86,18 @@ public final class SimpleKeyboardView extends LinearLayout {
         compositionView.setPadding(dp(8), 0, dp(8), 0);
 
         candidateRow.setOrientation(HORIZONTAL);
-        HorizontalScrollView scroller = new HorizontalScrollView(getContext());
-        scroller.setHorizontalScrollBarEnabled(false);
-        scroller.addView(candidateRow, new HorizontalScrollView.LayoutParams(
+        candidateScroller.setHorizontalScrollBarEnabled(false);
+        candidateScroller.addView(candidateRow, new HorizontalScrollView.LayoutParams(
                 LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
         LinearLayout candidateBar = createRow();
         candidateBar.setGravity(Gravity.CENTER_VERTICAL);
         candidateBar.addView(compositionView, new LayoutParams(
                 LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT));
-        candidateBar.addView(scroller, new LayoutParams(0, LayoutParams.MATCH_PARENT, 1f));
+        candidateBar.addView(previousCandidates, new LayoutParams(dp(28), dp(40)));
+        previousCandidates.setOnClickListener(view -> showCandidatePage(candidatePage - 1));
+        candidateBar.addView(candidateScroller, new LayoutParams(0, LayoutParams.MATCH_PARENT, 1f));
+        candidateBar.addView(nextCandidates, new LayoutParams(dp(28), dp(40)));
+        nextCandidates.setOnClickListener(view -> showCandidatePage(candidatePage + 1));
         addView(candidateBar, new LayoutParams(LayoutParams.MATCH_PARENT, dp(46)));
         addView(toolbar, new LayoutParams(LayoutParams.MATCH_PARENT, dp(34)));
 
@@ -228,8 +240,21 @@ public final class SimpleKeyboardView extends LinearLayout {
 
     public void showCandidates(String composition, java.util.List<Candidate> candidates) {
         compositionView.setText(composition.isEmpty() ? modeTitle() : composition);
+        visibleCandidates = candidates;
+        showCandidatePage(0);
+    }
+
+    private void showCandidatePage(int page) {
+        int pageCount = Math.max(1, (visibleCandidates.size() + CANDIDATES_PER_PAGE - 1)
+                / CANDIDATES_PER_PAGE);
+        candidatePage = Math.max(0, Math.min(page, pageCount - 1));
+        previousCandidates.setVisibility(candidatePage > 0 ? View.VISIBLE : View.GONE);
+        nextCandidates.setVisibility(candidatePage + 1 < pageCount ? View.VISIBLE : View.GONE);
         candidateRow.removeAllViews();
-        for (Candidate candidate : candidates) {
+        int start = candidatePage * CANDIDATES_PER_PAGE;
+        int end = Math.min(start + CANDIDATES_PER_PAGE, visibleCandidates.size());
+        for (int i = start; i < end; i++) {
+            Candidate candidate = visibleCandidates.get(i);
             Button button = createKey(pronunciationPolicy.labelFor(candidate));
             button.setTextSize(14);
             button.setSingleLine(true);
@@ -242,6 +267,7 @@ public final class SimpleKeyboardView extends LinearLayout {
             button.setMinWidth(dp(68));
             candidateRow.addView(button, params);
         }
+        candidateScroller.scrollTo(0, 0);
     }
 
     public void setMode(InputMode mode) {

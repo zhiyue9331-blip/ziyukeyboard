@@ -109,7 +109,7 @@ public final class AssemblyEngine {
             if (!seenText.add(entry.text)) continue;
             result.add(new Candidate(entry.text, entry.pinyin, entry.frequency,
                     Candidate.Source.ASSEMBLY, entry.components));
-            if (result.size() == 24) break;
+            if (result.size() == 256) break;
         }
         return result;
     }
