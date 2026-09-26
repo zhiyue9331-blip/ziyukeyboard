@@ -1,14 +1,15 @@
 # 字语输入法
 
-字语输入法是一个原生 Android 中文输入法，重点探索“部件读音拼字”和候选读音反馈。项目使用 Java、Android `InputMethodService` 与 BSD-3-Clause 许可的 librime 1.16.1，最低支持 Android 6.0（API 23）。
+字语输入法 0.4.14 是一个原生 Android 中文输入法，重点探索“部件读音拼字”和候选读音反馈。项目使用 Java、Android `InputMethodService` 与 BSD-3-Clause 许可的 librime 1.16.1，最低支持 Android 6.0（API 23）。
 
 ## 已实现功能
 
 - 26 键拼音输入、整句候选、简拼和用户词频学习；librime 未就绪时自动使用 6.5 万余条 Java 离线候选
 - 常见声母、模糊音及前后鼻音匹配
+- 单字精确拼音优先显示；完整词库加载期间显示提示
 - 拼字输入：1.1 万余种部件组合接入 Rime 表格引擎，并保留 `jiuri → 旮（gā，九+日）`、`wangyu/wangyv → 珏（jué，王+玉）`
 - 中文数字墨水手写识别；只有生僻字显示拼音，常用字候选保持简洁
-- 拼音、拼字、手写、英文、数字和符号模式即时切换
+- 拼音、拼字、手写、英文、数字和符号模式即时切换；英文支持大小写，符号支持中英文分页
 - 候选栏右侧的「›」可翻页查找低频字，如 `fu → 祓`、`si → 巳`
 - 顶部紧凑候选栏、轻量模式栏以及主键盘逗号/句号快捷键
 - 五行常用符号面板，可直接输入中英文标点、括号和网络符号
@@ -16,7 +17,7 @@
 - 使用 Android 文件选择器导入或导出 JSON 皮肤包
 - 振动反馈和按键音开关
 - 本地词频、连续表达学习和自定义词条
-- 密码类输入框自动停止学习
+- 密码类输入框和声明“禁止个性化学习”的编辑器自动停止学习
 - 用户词库、设置和输入习惯不进行云备份
 
 ## 构建环境
@@ -33,15 +34,17 @@
 .\gradlew.bat assembleDebug
 ```
 
-APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。
-默认构建不包含个人图片皮肤；PR 的 CI 只上传这个 APK。
+APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。默认构建不包含个人图片皮肤。
+PR 的 CI 检查 APK 中没有个人图片资源后，将其作为 `ziyu-0.4.14-no-skin` 构建产物上传。
 
 由于仓库目录名含中文，部分 Windows 版本的 Gradle 测试工作进程可能无法解析测试类路径。可临时映射 ASCII 盘符：
 
 ```powershell
-subst R: "C:\Users\23170\Desktop\输入法"
+$repoPath = (Get-Location).Path
+subst R: $repoPath
 Set-Location R:\
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
+Set-Location $repoPath
 subst R: /D
 ```
 
@@ -56,9 +59,9 @@ subst R: /D
 ## 数据与隐私
 
 - 拼音、拼字和基础词库查询均离线完成。
-- ML Kit 语言模型仅在首次使用手写时下载，书写轨迹在设备端识别。
+- ML Kit 语言模型仅在首次使用手写时下载，书写轨迹和识别结果留在设备端。ML Kit 仍会按其数据披露说明发送设备、应用和使用诊断指标，不包含手写轨迹或识别文本。
 - 候选选择次数、连续表达和自定义词条保存在应用私有存储中。
-- 密码、可见密码、网页密码和数字密码输入框不会写入学习数据。
+- 密码、可见密码、网页密码、数字密码输入框，以及声明“禁止个性化学习”的编辑器不会写入学习数据。
 - 应用禁止明文网络流量，并关闭系统云备份及设备迁移数据导出。
 - 设置页可暂停个性化学习或清空全部本地学习数据。
 
