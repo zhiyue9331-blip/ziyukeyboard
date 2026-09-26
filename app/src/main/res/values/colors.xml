@@ -3,4 +3,5 @@
     <color name="ink">#17212B</color>
     <color name="paper">#F5F7F8</color>
     <color name="accent">#0F766E</color>
+    <color name="key_surface">#FFFFFF</color>
 </resources>

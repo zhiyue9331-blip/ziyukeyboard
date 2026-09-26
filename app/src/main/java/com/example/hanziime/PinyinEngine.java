@@ -82,9 +82,12 @@ public final class PinyinEngine {
     public List<Candidate> search(String rawInput, boolean fuzzyEnabled) {
         String query = normalize(rawInput);
         if (query.isEmpty()) return List.of();
-        String comparableQuery = fuzzyEnabled ? fuzzyCanonical(query) : query;
-        Map<String, List<Entry>> fullIndex = fuzzyEnabled ? fuzzyFullIndex : normalFullIndex;
-        Map<String, List<Entry>> initialIndex = fuzzyEnabled
+        // Single-letter queries: never apply n↔l (etc.) fuzzy so "l" stays l-words,
+        // not 嗯/那个 from fuzzyCanonical(n→l). Longer input keeps full fuzzy.
+        boolean useFuzzy = fuzzyEnabled && query.length() >= 2;
+        String comparableQuery = useFuzzy ? fuzzyCanonical(query) : query;
+        Map<String, List<Entry>> fullIndex = useFuzzy ? fuzzyFullIndex : normalFullIndex;
+        Map<String, List<Entry>> initialIndex = useFuzzy
                 ? fuzzyInitialIndex : normalInitialIndex;
         String prefix = comparableQuery.substring(0, Math.min(2, comparableQuery.length()));
         Set<Entry> pool = new LinkedHashSet<>();
@@ -95,16 +98,44 @@ public final class PinyinEngine {
         List<Scored> matches = new ArrayList<>();
 
         for (Entry entry : pool) {
-            String full = fuzzyEnabled ? fuzzyCanonical(entry.key) : entry.key;
-            String initials = fuzzyEnabled ? fuzzyCanonical(entry.initials) : entry.initials;
+            String full = useFuzzy ? fuzzyCanonical(entry.key) : entry.key;
+            String initials = useFuzzy ? fuzzyCanonical(entry.initials) : entry.initials;
             int quality = matchQuality(comparableQuery, full, initials);
-            if (quality > 0) matches.add(new Scored(entry, entry.frequency + quality));
+            if (quality <= 0) continue;
+            int score = entry.frequency + quality;
+            // Exact syllable hits: keep single characters ahead of longer phrases
+            // that only prefix-match (e.g. da→打 before 大学/打开).
+            if (full.equals(comparableQuery) && entry.text.length() > 1) {
+                score -= 100_000 * (entry.text.length() - 1);
+            }
+            // Typing "a" must not surface 爱(ai)/安(an) above 啊(a).
+            if (!full.equals(comparableQuery) && full.startsWith(comparableQuery)
+                    && entry.text.length() == 1) {
+                score -= 1_500_000;
+            } else if (!full.equals(comparableQuery) && full.startsWith(comparableQuery)
+                    && entry.text.length() > 1) {
+                score -= 50_000 * (entry.text.length() - 1);
+                // Single letter: further demote multi-char prefix hits so 了/里
+                // can compete with 老师/里面 (no exact syllable "l"), and so
+                // core phrases like 方便 do not outrank 发/法 on lone "f".
+                if (comparableQuery.length() == 1) {
+                    score -= 2_600_000;
+                }
+            }
+            // Initials abbreviation hits like de→第二 (di+er) must stay far below 的.
+            if (!full.equals(comparableQuery) && initials.equals(comparableQuery)
+                    && entry.text.length() > 1) {
+                score -= 1_800_000;
+            }
+            matches.add(new Scored(entry, score));
         }
 
         Collections.sort(matches, (left, right) -> {
             int scoreOrder = Integer.compare(right.score, left.score);
-            return scoreOrder != 0 ? scoreOrder
-                    : Integer.compare(left.entry.text.length(), right.entry.text.length());
+            if (scoreOrder != 0) return scoreOrder;
+            int lengthOrder = Integer.compare(left.entry.text.length(), right.entry.text.length());
+            if (lengthOrder != 0) return lengthOrder;
+            return Integer.compare(right.entry.frequency, left.entry.frequency);
         });
         List<Candidate> result = new ArrayList<>();
         Set<String> seenText = new LinkedHashSet<>();
@@ -118,10 +149,17 @@ public final class PinyinEngine {
     }
 
     private static int matchQuality(String query, String full, String initials) {
+        // Exact key must beat core-dict frequency bonus (+1_000_000) on prefix phrases.
         if (full.equals(query)) return 2_000_000;
-        if (full.startsWith(query)) return 7_000 - (full.length() - query.length()) * 10;
-        if (query.length() >= 2 && initials.equals(query)) return 5_000;
-        if (query.length() >= 2 && initials.startsWith(query)) return 3_000;
+        if (full.startsWith(query)) {
+            int extra = full.length() - query.length();
+            return 80_000 - extra * 3_000;
+        }
+        if (query.length() >= 2 && initials.equals(query)) return 200_000;
+        if (query.length() >= 2 && initials.startsWith(query)) {
+            int extra = initials.length() - query.length();
+            return 100_000 - extra * 2_000;
+        }
         return 0;
     }
 

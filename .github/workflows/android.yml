@@ -35,3 +35,21 @@ jobs:
 
       - name: Test, lint, and assemble
         run: .\gradlew.bat --no-daemon testDebugUnitTest lintDebug assembleDebug
+
+      - name: Check public APK contents
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.IO.Compression
+          $apk = [IO.Compression.ZipFile]::OpenRead('app/build/outputs/apk/debug/app-debug.apk')
+          if ($apk.Entries.FullName -match 'star_bunny_skin') {
+            throw 'Personal image skin must not be included in the PR APK.'
+          }
+          $apk.Dispose()
+
+      - name: Upload public APK
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ziyu-0.4.14-no-skin
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

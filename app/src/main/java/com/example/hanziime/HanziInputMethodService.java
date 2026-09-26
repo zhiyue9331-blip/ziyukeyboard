@@ -51,6 +51,7 @@ public final class HanziInputMethodService extends InputMethodService
     private UserLexiconStore userLexicon;
     private boolean privateInput;
     private String previousCommitted = "";
+    private volatile boolean fullPinyinReady;
 
     @Override
     public void onCreate() {
@@ -73,6 +74,7 @@ public final class HanziInputMethodService extends InputMethodService
                     if (destroyed) return;
                     pinyinEngine = fullPinyin;
                     assemblyEngine = fullAssembly;
+                    fullPinyinReady = true;
                     if (composition.length() > 0) refreshCandidates();
                 });
             } catch (RuntimeException ignored) {
@@ -180,6 +182,10 @@ public final class HanziInputMethodService extends InputMethodService
 
     @Override
     public void onSpace() {
+        if (composition.length() > 0) {
+            if (!candidates.isEmpty()) commitCandidate(candidates.get(0));
+            return;
+        }
         if (!candidates.isEmpty()) {
             commitCandidate(candidates.get(0));
         } else {
@@ -261,12 +267,64 @@ public final class HanziInputMethodService extends InputMethodService
             java.util.List<Candidate> custom = privateInput
                     ? java.util.List.of()
                     : userLexicon.customFor(composition.toString());
-            candidates = mergeCandidates(custom, decoded,
-                    pinyinEngine.search(composition.toString(), fuzzy));
+            java.util.List<Candidate> fromJava =
+                    pinyinEngine.search(composition.toString(), fuzzy);
+            candidates = mergeCandidates(exactSingleCharHits(composition.toString(), fromJava),
+                    custom, decoded, fromJava);
         }
         if (learningAllowed()) candidates = userLexicon.rerank(candidates);
+        if (mode == SimpleKeyboardView.InputMode.PINYIN) {
+            candidates = preferExactSingleChars(composition.toString(), candidates);
+        }
         if (candidates.size() > 256) candidates = new ArrayList<>(candidates.subList(0, 256));
-        if (keyboard != null) keyboard.showCandidates(composition.toString(), candidates);
+        if (keyboard != null) {
+            if (candidates.isEmpty() && composition.length() > 0 && !fullPinyinReady
+                    && mode == SimpleKeyboardView.InputMode.PINYIN) {
+                keyboard.showDictionaryLoading(composition.toString());
+            } else {
+                keyboard.showCandidates(composition.toString(), candidates);
+            }
+        }
+    }
+
+    static List<Candidate> exactSingleCharHits(String rawComposition,
+                                               List<Candidate> fromJava) {
+        String query = PinyinEngine.normalize(rawComposition);
+        if (query.isEmpty() || fromJava.isEmpty()) return List.of();
+        List<Candidate> hits = new ArrayList<>();
+        for (Candidate candidate : fromJava) {
+            if (candidate.text().length() == 1
+                    && PinyinEngine.normalize(candidate.pinyin()).equals(query)) {
+                hits.add(candidate);
+            }
+        }
+        return hits;
+    }
+
+    static List<Candidate> preferExactSingleChars(String rawComposition,
+                                                  List<Candidate> candidates) {
+        String query = PinyinEngine.normalize(rawComposition);
+        if (query.isEmpty() || candidates.isEmpty()) return candidates;
+        List<Candidate> exactSingles = new ArrayList<>();
+        List<Candidate> longerReadingSingles = new ArrayList<>();
+        List<Candidate> rest = new ArrayList<>();
+        for (Candidate candidate : candidates) {
+            String reading = PinyinEngine.normalize(candidate.pinyin());
+            if (candidate.text().length() == 1 && reading.equals(query)) {
+                exactSingles.add(candidate);
+            } else if (candidate.text().length() == 1 && reading.startsWith(query)
+                    && !reading.equals(query)) {
+                longerReadingSingles.add(candidate);
+            } else {
+                rest.add(candidate);
+            }
+        }
+        if (exactSingles.isEmpty() && longerReadingSingles.isEmpty()) return candidates;
+        List<Candidate> ordered = new ArrayList<>(candidates.size());
+        ordered.addAll(exactSingles);
+        ordered.addAll(rest);
+        ordered.addAll(longerReadingSingles);
+        return ordered;
     }
 
     @SafeVarargs

@@ -1,4 +1,5 @@
 # key	text	display pinyin	frequency
+a	啊	a	5000
 ni	你	nǐ	990
 hao	好	hǎo	980
 nihao	你好	nǐ hǎo	1200
@@ -50,7 +51,7 @@ si	四	sì	890
 wu	五	wǔ	890
 liu	六	liù	890
 qi	七	qī	890
-ba	八	bā	890
+ba	吧	ba	5000
 jiu	九	jiǔ	890
 shi	十	shí	940
 ge	个	gè	1160
@@ -105,3 +106,20 @@ shezhi	设置	shè zhì	930
 dakai	打开	dǎ kāi	960
 guanbi	关闭	guān bì	950
 wancheng	完成	wán chéng	1000
+an	安	ān	5000
+shishi	试试	shì shi	5000
+bukeyi	不可以	bù kě yǐ	5000
+mohuyin	模糊音	mó hu yīn	3000
+yihuir	一会儿	yī huìr	3000
+yihuier	一会儿	yī huì er	3000
+zenmejiale	怎么了	zěn me le	3000
+buxihuan	不喜欢	bù xǐ huan	3000
+da	打	da	5000
+da	大	da	4900
+zi	字	zi	5000
+zi	子	zi	4800
+dazi	打字	da zi	5000
+dazi	大字	da zi	3000
+xigua	西瓜	xi gua	3000
+xia	下	xia	4000
+gua	瓜	gua	2000

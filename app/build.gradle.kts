@@ -10,8 +10,8 @@ android {
         applicationId = "com.example.hanziime"
         minSdk = 23
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.4.3"
+        versionCode = 21
+        versionName = "0.4.14"
     }
 
     buildTypes {
@@ -21,6 +21,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
 
