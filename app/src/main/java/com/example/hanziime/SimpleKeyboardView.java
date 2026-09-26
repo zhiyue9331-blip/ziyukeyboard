@@ -47,6 +47,9 @@ public final class SimpleKeyboardView extends LinearLayout {
     private final HandwritingPad handwritingPad;
     private InputMode mode = InputMode.PINYIN;
     private final SharedPreferences preferences;
+    /** 0 = off, 1 = next key upper, 2 = caps lock */
+    private int shiftState = 0;
+    private int symbolPage = 0;
 
     public SimpleKeyboardView(Context context) {
         super(context);
@@ -79,7 +82,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         addModeButton(toolbar, "123", InputMode.NUMBER);
         addModeButton(toolbar, "符号", InputMode.SYMBOL);
 
-        compositionView.setText(R.string.keyboard_pinyin_title);
+        compositionView.setText("中文 · 26键");
         compositionView.setTextColor(accentColor());
         compositionView.setTextSize(14);
         compositionView.setGravity(Gravity.CENTER_VERTICAL);
@@ -136,11 +139,15 @@ public final class SimpleKeyboardView extends LinearLayout {
         keyboardArea.removeAllViews();
         String[] rows = switch (mode) {
             case NUMBER -> new String[]{"123", "456", "789", "+-0.="};
-            case SYMBOL -> new String[]{"！？。，", "；：、…", "（）【】", "《》“”", "@#%&"};
+            case SYMBOL -> symbolPage == 0
+                    ? new String[]{"！？。，、；：", "…—～·「」『』", "（）【】《》〈〉", "“”‘’￥€£¥", "@#%&*_"}
+                    : new String[]{"!?.,:;", "'\"()[]{}", "@#/\\|_+-*=", "<>$€£¥~`", "^°©®™§"};
             default -> ROWS;
         };
         boolean letterLayout = mode == InputMode.PINYIN || mode == InputMode.ASSEMBLY
                 || mode == InputMode.ENGLISH;
+        boolean english = mode == InputMode.ENGLISH;
+        boolean upper = english && shiftState != 0;
         for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
             String keys = rows[rowIndex];
             LinearLayout row = createRow();
@@ -148,20 +155,39 @@ public final class SimpleKeyboardView extends LinearLayout {
                 row.addView(new View(getContext()), weightedKey(0.48f));
             }
             if (letterLayout && rowIndex == 2) {
-                InputMode target = mode == InputMode.ENGLISH ? InputMode.PINYIN : InputMode.ENGLISH;
-                String label = mode == InputMode.ENGLISH ? "中文" : "英文";
-                Button language = createKey(label);
-                language.setTextSize(13);
-                language.setOnClickListener(view -> {
-                    if (listener != null) listener.onModeSelected(target);
-                });
-                row.addView(language, weightedKey(1.18f));
+                if (english) {
+                    String shiftLabel = shiftState == 2 ? "⇪" : (shiftState == 1 ? "⇧·" : "⇧");
+                    Button shift = createKey(shiftLabel);
+                    shift.setTextSize(16);
+                    shift.setOnClickListener(view -> {
+                        // off -> once -> caps -> off
+                        shiftState = (shiftState + 1) % 3;
+                        rebuildKeyArea();
+                    });
+                    row.addView(shift, weightedKey(1.18f));
+                } else {
+                    InputMode target = InputMode.ENGLISH;
+                    Button language = createKey("英文");
+                    language.setTextSize(13);
+                    language.setOnClickListener(view -> {
+                        if (listener != null) listener.onModeSelected(target);
+                    });
+                    row.addView(language, weightedKey(1.18f));
+                }
             }
             for (int i = 0; i < keys.length(); i++) {
-                String letter = String.valueOf(keys.charAt(i));
-                Button key = createKey(letter);
+                char raw = keys.charAt(i);
+                String letter = String.valueOf(raw);
+                String shown = (letterLayout && english && Character.isLetter(raw) && upper)
+                        ? letter.toUpperCase(java.util.Locale.ROOT) : letter;
+                Button key = createKey(shown);
+                final String commit = shown;
                 key.setOnClickListener(view -> {
-                    if (listener != null) listener.onLetter(letter);
+                    if (listener != null) listener.onLetter(commit);
+                    if (english && shiftState == 1) {
+                        shiftState = 0;
+                        rebuildKeyArea();
+                    }
                 });
                 row.addView(key, weightedKey());
             }
@@ -183,6 +209,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         if (letterLayout) {
             Button symbols = createKey("符");
             symbols.setOnClickListener(view -> {
+                symbolPage = 0;
                 if (listener != null) listener.onModeSelected(InputMode.SYMBOL);
             });
             actions.addView(symbols, weightedKey(0.82f));
@@ -194,15 +221,35 @@ public final class SimpleKeyboardView extends LinearLayout {
             });
             actions.addView(numbers, weightedKey(0.92f));
 
-            String leftMark = mode == InputMode.ENGLISH ? "," : "，";
-            Button comma = createKey(leftMark);
-            comma.setOnClickListener(view -> {
-                if (listener != null) listener.onDirectText(leftMark);
-            });
-            actions.addView(comma, weightedKey(0.62f));
+            if (english) {
+                Button language = createKey("中文");
+                language.setTextSize(13);
+                language.setOnClickListener(view -> {
+                    shiftState = 0;
+                    if (listener != null) listener.onModeSelected(InputMode.PINYIN);
+                });
+                actions.addView(language, weightedKey(0.82f));
+            } else {
+                String leftMark = "，";
+                Button comma = createKey(leftMark);
+                comma.setOnClickListener(view -> {
+                    if (listener != null) listener.onDirectText(leftMark);
+                });
+                actions.addView(comma, weightedKey(0.62f));
+            }
         } else {
+            if (mode == InputMode.SYMBOL) {
+                Button page = createKey(symbolPage == 0 ? "符2" : "符1");
+                page.setTextSize(13);
+                page.setOnClickListener(view -> {
+                    symbolPage = symbolPage == 0 ? 1 : 0;
+                    rebuildKeyArea();
+                });
+                actions.addView(page, weightedKey(0.9f));
+            }
             Button letters = createKey("ABC");
             letters.setOnClickListener(view -> {
+                symbolPage = 0;
                 if (listener != null) listener.onModeSelected(InputMode.PINYIN);
             });
             actions.addView(letters, weightedKey());
@@ -212,10 +259,10 @@ public final class SimpleKeyboardView extends LinearLayout {
         space.setOnClickListener(view -> {
             if (listener != null) listener.onSpace();
         });
-        actions.addView(space, weightedKey(3f));
+        actions.addView(space, weightedKey(english ? 2.4f : 3f));
 
         if (letterLayout) {
-            String rightMark = mode == InputMode.ENGLISH ? "." : "。";
+            String rightMark = english ? "." : "。";
             Button period = createKey(rightMark);
             period.setOnClickListener(view -> {
                 if (listener != null) listener.onDirectText(rightMark);
@@ -236,6 +283,25 @@ public final class SimpleKeyboardView extends LinearLayout {
         });
         actions.addView(enter, weightedKey(1.08f));
         keyboardArea.addView(actions, new LayoutParams(LayoutParams.MATCH_PARENT, dp(45)));
+    }
+
+    public void showDictionaryLoading(String composition) {
+        compositionView.setText(composition);
+        visibleCandidates = java.util.List.of();
+        candidatePage = 0;
+        previousCandidates.setVisibility(View.GONE);
+        nextCandidates.setVisibility(View.GONE);
+        candidateRow.removeAllViews();
+        TextView hint = new TextView(getContext());
+        hint.setText("词库加载中…");
+        hint.setTextSize(14);
+        hint.setTextColor(Color.rgb(110, 120, 128));
+        hint.setGravity(Gravity.CENTER_VERTICAL);
+        hint.setPadding(dp(8), 0, dp(8), 0);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LayoutParams.WRAP_CONTENT, dp(40));
+        params.setMargins(dp(2), dp(2), dp(2), dp(2));
+        candidateRow.addView(hint, params);
     }
 
     public void showCandidates(String composition, java.util.List<Candidate> candidates) {
@@ -272,6 +338,8 @@ public final class SimpleKeyboardView extends LinearLayout {
 
     public void setMode(InputMode mode) {
         this.mode = mode;
+        if (mode != InputMode.ENGLISH) shiftState = 0;
+        if (mode != InputMode.SYMBOL) symbolPage = 0;
         boolean handwriting = mode == InputMode.HANDWRITING;
         keyboardArea.setVisibility(handwriting ? View.GONE : View.VISIBLE);
         handwritingArea.setVisibility(handwriting ? View.VISIBLE : View.GONE);
@@ -293,7 +361,7 @@ public final class SimpleKeyboardView extends LinearLayout {
             case HANDWRITING -> "手写输入";
             case ENGLISH -> "英文 · 26键";
             case NUMBER -> "数字键盘";
-            case SYMBOL -> "常用符号";
+            case SYMBOL -> symbolPage == 0 ? "符号 · 中文" : "符号 · 英文";
             default -> "中文 · 26键";
         };
     }
@@ -402,4 +470,5 @@ public final class SimpleKeyboardView extends LinearLayout {
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
+
 }

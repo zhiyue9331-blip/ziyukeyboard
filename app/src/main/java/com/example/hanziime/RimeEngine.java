@@ -60,7 +60,7 @@ final class RimeEngine implements AutoCloseable {
             } catch (NumberFormatException ignored) {
                 consumedLength = -1;
             }
-            String pronunciation = comment.isBlank() ? input : comment;
+            String pronunciation = comment == null ? "" : comment.trim();
             Candidate candidate = new Candidate(text, pronunciation,
                     100_000 - index / 3, source, "", consumedLength);
             result.add(candidate);
