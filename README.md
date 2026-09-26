@@ -40,9 +40,11 @@ PR 的 CI 检查 APK 中没有个人图片资源后，将其作为 `ziyu-0.4.14-
 由于仓库目录名含中文，部分 Windows 版本的 Gradle 测试工作进程可能无法解析测试类路径。可临时映射 ASCII 盘符：
 
 ```powershell
-subst R: "C:\Users\23170\Desktop\输入法"
+$repoPath = (Get-Location).Path
+subst R: $repoPath
 Set-Location R:\
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
+Set-Location $repoPath
 subst R: /D
 ```
 
