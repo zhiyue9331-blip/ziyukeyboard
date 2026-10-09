@@ -6,9 +6,12 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class AssemblyEngineTest {
@@ -24,6 +27,18 @@ public class AssemblyEngineTest {
         assertEquals("旮", candidate.text());
         assertEquals("gā", candidate.pinyin());
         assertEquals("九+日", candidate.annotation());
+    }
+
+    @Test
+    public void exactSpellingBeatsAHeavierLongerCode() {
+        AssemblyEngine engine = new AssemblyEngine(new StringReader("""
+                koukou\t吕\tlǚ\t口+口\t650
+                koukoukou\t品\tpǐn\t口+口+口\t500000
+                """));
+        assertEquals("吕", engine.search("koukou").get(0).text());
+        assertEquals(List.of("吕"), engine.exactMatches("koukou").stream()
+                .map(Candidate::text).toList());
+        assertEquals("品", engine.search("koukoukou").get(0).text());
     }
 
     @Test
@@ -55,6 +70,22 @@ public class AssemblyEngineTest {
         assertTrue(engine.search("wangyu").stream()
                 .anyMatch(candidate -> candidate.text().equals("珏")));
         assertFalseOrMoreThanExamples(engine);
+    }
+
+    @Test
+    public void curatedListDoesNotHideAMuchCommonerExactMatch() throws IOException {
+        AssemblyEngine engine = new AssemblyEngine(
+                new InputStreamReader(new FileInputStream(asset("assembly_dictionary.tsv")),
+                        StandardCharsets.UTF_8),
+                new InputStreamReader(new FileInputStream(asset("assembly_full.tsv")),
+                        StandardCharsets.UTF_8));
+        assertEquals("昌", engine.search("riri").get(0).text());
+        assertEquals("晚", engine.search("rimian").get(0).text());
+        assertEquals("吧", engine.search("kouba").get(0).text());
+        assertEquals("只", engine.search("kueba").get(0).text());
+        assertEquals("旮", engine.search("jiuri").get(0).text());
+        assertEquals("林", engine.search("mumu").get(0).text());
+        assertEquals("吕", engine.search("koukou").get(0).text());
     }
 
     private static void assertFalseOrMoreThanExamples(AssemblyEngine engine) {

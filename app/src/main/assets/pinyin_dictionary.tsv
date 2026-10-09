@@ -1,6 +1,6 @@
 # key	text	display pinyin	frequency
 a	啊	a	5000
-ni	你	nǐ	990
+ni	你	nǐ	1400
 hao	好	hǎo	980
 nihao	你好	nǐ hǎo	1200
 wo	我	wǒ	1100
@@ -50,9 +50,7 @@ san	三	sān	890
 si	四	sì	890
 wu	五	wǔ	890
 liu	六	liù	890
-qi	七	qī	890
 ba	吧	ba	5000
-jiu	九	jiǔ	890
 shi	十	shí	940
 ge	个	gè	1160
 gei	给	gěi	1050

@@ -16,7 +16,7 @@ import java.util.Map;
 
 /** Thin Java owner for the BSD-licensed librime native decoder. */
 final class RimeEngine implements AutoCloseable {
-    private static final String DATA_VERSION = "2";
+    private static final String DATA_VERSION = "6";
     private final Map<String, Integer> candidateIndexes = new HashMap<>();
     private boolean closed;
 
@@ -60,6 +60,8 @@ final class RimeEngine implements AutoCloseable {
             } catch (NumberFormatException ignored) {
                 consumedLength = -1;
             }
+            // Do not fall back to the raw composition: that marks 爱 as reading "a" while
+            // the user is still typing the first letter of "ai", burying 啊.
             String pronunciation = comment == null ? "" : comment.trim();
             Candidate candidate = new Candidate(text, pronunciation,
                     100_000 - index / 3, source, "", consumedLength);

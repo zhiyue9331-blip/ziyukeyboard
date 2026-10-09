@@ -218,4 +218,270 @@ public class PinyinEngineTest {
                 fHits.get(0).text().equals("方便"));
     }
 
+    @Test
+    public void abbreviationOutranksLongerCompletion() {
+        PinyinEngine engine = new PinyinEngine(new StringReader("""
+                zhongguo\t中国\tzhōng guó\t1240
+                zhege\t这个\tzhè ge\t1160
+                zhongguoren\t中国人\tzhōng guó rén\t9244
+                zhegeren\t这个人\tzhè ge rén\t2801
+                zhongguorenmin\t中国人民\tzhōng guó rén mín\t1364
+                beijing\t北京\tbei jing\t53176
+                beijingren\t北京人\tběi jīng rén\t669
+                nihao\t你好\tnǐ hǎo\t1200
+                nihaoma\t你好吗\tnǐ hǎo ma\t182
+                """));
+        List<Candidate> zg = engine.search("zg", false);
+        assertEquals(List.of("中国", "这个"),
+                zg.stream().limit(2).map(Candidate::text).toList());
+        assertBefore(zg, "中国", "中国人");
+        assertBefore(zg, "这个", "中国人");
+
+        List<Candidate> zgr = engine.search("zgr", false);
+        assertEquals("中国人", zgr.get(0).text());
+        assertBefore(zgr, "中国人", "中国人民");
+
+        assertBefore(engine.search("bj", false), "北京", "北京人");
+        List<Candidate> nh = engine.search("nh", false);
+        assertEquals("你好", nh.get(0).text());
+        assertBefore(nh, "你好", "你好吗");
+    }
+
+    @Test
+    public void productionAbbreviationPutsChinaFirst() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        List<Candidate> zg = engine.search("zg", false);
+        assertEquals("中国", zg.get(0).text());
+        assertBefore(zg, "中国", "这个");
+        assertBefore(zg, "这个", "中国人");
+        assertBefore(engine.search("bj", false), "北京", "北京人");
+        List<Candidate> nh = engine.search("nh", false);
+        assertEquals("你好", nh.get(0).text());
+        assertBefore(nh, "你好", "你好吗");
+        List<Candidate> zgr = engine.search("zgr", false);
+        assertEquals("中国人", zgr.get(0).text());
+        assertBefore(zgr, "中国人", "中国人民");
+    }
+
+    @Test
+    public void abbreviationQueryIgnoresFullPinyinAndUnfinishedSyllables() {
+        assertTrue(PinyinEngine.isAbbreviationQuery("zg"));
+        assertTrue(PinyinEngine.isAbbreviationQuery("bj"));
+        assertTrue(PinyinEngine.isAbbreviationQuery("nh"));
+        assertTrue(PinyinEngine.isAbbreviationQuery("zgr"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("de"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("zh"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("zhon"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("nihao"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("zhongguo"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("shishi"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("yihuir"));
+        assertFalse(PinyinEngine.isAbbreviationQuery("a"));
+        assertEquals("zg", PinyinEngine.initialsOf("zhōng guó"));
+        assertEquals("zgr", PinyinEngine.initialsOf("zhōng guó rén"));
+    }
+
+    @Test
+    public void partialSyllablePrefersCharactersOverPhrases() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        List<Candidate> sh = engine.search("sh", false);
+        assertEquals("是", sh.get(0).text());
+        assertBefore(sh, "是", "试试");
+        assertBefore(sh, "说", "什么");
+        List<Candidate> zh = engine.search("zh", false);
+        assertEquals("这", zh.get(0).text());
+        assertBefore(zh, "这", "这个");
+        assertBefore(zh, "中", "中国");
+        List<Candidate> zhon = engine.search("zhon", false);
+        assertEquals("中", zhon.get(0).text());
+        assertBefore(zhon, "中", "中国");
+    }
+
+    @Test
+    public void ngRanksExactAbbreviationAheadOfLongerWord() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        List<Candidate> ng = engine.search("ng", false);
+        assertEquals("嗯", ng.get(0).text());
+        assertBefore(ng, "那个", "那个人");
+        assertBefore(ng, "哪个", "那个人");
+        int neige = -1;
+        int second = -1;
+        List<Candidate> de = engine.search("de", false);
+        for (int i = 0; i < ng.size(); i++) {
+            if (ng.get(i).text().equals("那个")) neige = i;
+        }
+        for (int i = 0; i < de.size(); i++) {
+            if (de.get(i).text().equals("第二")) second = i;
+        }
+        assertTrue("那个 should sit with 嗯, at " + neige, neige >= 0 && neige < 8);
+        assertEquals("的", de.get(0).text());
+        assertTrue("第二 stays well below 的, at " + second, second < 0 || second > 20);
+    }
+
+    @Test
+    public void bareNLeadsWithNiNotTheEnInterjection() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        List<Candidate> n = engine.search("n", true);
+        assertEquals("你", n.get(0).text());
+        assertFalse(n.stream().limit(3).anyMatch(c -> c.text().equals("嗯") || c.text().equals("唔")));
+        List<Candidate> en = engine.search("en", false);
+        assertEquals("恩", en.get(0).text());
+        assertTrue(en.stream().limit(6).anyMatch(c -> c.text().equals("嗯")));
+    }
+
+    @Test
+    public void yecanLeadsWithPicnicNotFuzzyChang() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        assertEquals("野餐", engine.search("yecan", false).get(0).text());
+        List<Candidate> fuzzy = engine.search("yecan", true);
+        assertEquals("野餐", fuzzy.get(0).text());
+        int chang = -1;
+        for (int i = 0; i < fuzzy.size(); i++) {
+            if (fuzzy.get(i).text().equals("也常")) chang = i;
+        }
+        assertTrue(chang < 0 || chang > 0);
+    }
+
+    @Test
+    public void commonAbbreviationsLeadWithTheExactWord() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        assertEquals("中国", engine.search("zg", false).get(0).text());
+        assertEquals("你好", engine.search("nh", false).get(0).text());
+        assertEquals("我们", engine.search("wm", false).get(0).text());
+        assertEquals("什么", engine.search("sm", false).get(0).text());
+        assertEquals("怎么", engine.search("zm", false).get(0).text());
+        assertEquals("今天", engine.search("jt", false).get(0).text());
+        assertEquals("为什么", engine.search("wsm", false).get(0).text());
+        assertEquals("中文", engine.search("zw", false).get(0).text());
+        assertEquals("可以", engine.search("ky", false).get(0).text());
+        assertEquals("没有", engine.search("my", false).get(0).text());
+        assertEquals("现在", engine.search("xz", false).get(0).text());
+        assertEquals("知道", engine.search("zd", false).get(0).text());
+        assertEquals("喜欢", engine.search("xh", false).get(0).text());
+        assertEquals("时间", engine.search("sj", false).get(0).text());
+        assertBefore(engine.search("sj", false), "时间", "手机");
+        assertBefore(engine.search("wm", false), "我们", "我们一起");
+        assertBefore(engine.search("jt", false), "今天", "今天晚上");
+        assertBefore(engine.search("bky", false), "不可以", "不可以吗");
+    }
+
+    @Test
+    public void noTwoLetterAbbreviationRanksALongerCompletionFirst() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        StringBuilder failures = new StringBuilder();
+        String letters = "abcdefghijklmnopqrstuvwxyz";
+        for (int i = 0; i < letters.length(); i++) {
+            for (int j = 0; j < letters.length(); j++) {
+                surveyAbbreviation(engine, "" + letters.charAt(i) + letters.charAt(j), failures);
+            }
+        }
+        for (String query : new String[] {
+                "zgr", "nhm", "wsm", "bky", "wmy", "jtz", "zgg", "rmb", "bjg"}) {
+            surveyAbbreviation(engine, query, failures);
+        }
+        assertEquals(failures.toString(), "", failures.toString());
+    }
+
+    private static void surveyAbbreviation(PinyinEngine engine, String query,
+                                           StringBuilder failures) {
+        if (!PinyinEngine.isAbbreviationQuery(query)) return;
+        List<Candidate> hits = engine.search(query, false);
+        int exactAt = -1;
+        int longerAt = -1;
+        for (int i = 0; i < hits.size(); i++) {
+            String initials = PinyinEngine.initialsOf(hits.get(i).pinyin());
+            if (exactAt < 0 && initials.equals(query)) exactAt = i;
+            if (longerAt < 0 && initials.startsWith(query) && initials.length() > query.length()) {
+                longerAt = i;
+            }
+        }
+        if (exactAt > 0) {
+            String reading = PinyinEngine.normalize(hits.get(0).pinyin());
+            if (!reading.equals(query)) {
+                failures.append(query).append(" first=").append(hits.get(0).text())
+                        .append(" exactAt=").append(exactAt)
+                        .append(" sample=").append(preview(hits)).append('\n');
+            }
+        }
+        if (exactAt >= 0 && longerAt >= 0 && longerAt < exactAt) {
+            failures.append(query).append(" longer before exact ").append(preview(hits)).append('\n');
+        }
+    }
+
+    private static String preview(List<Candidate> hits) {
+        StringBuilder preview = new StringBuilder();
+        int limit = Math.min(6, hits.size());
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) preview.append(' ');
+            preview.append(hits.get(i).text());
+        }
+        return preview.toString();
+    }
+
+    @Test
+    public void exactReadingLeadsWheneverTheDictionaryHasOne() throws IOException {
+        PinyinEngine engine = productionLikeEngine();
+        StringBuilder failures = new StringBuilder();
+        for (char letter = 'a'; letter <= 'z'; letter++) {
+            String query = String.valueOf(letter);
+            for (boolean fuzzy : new boolean[] {false, true}) {
+                List<Candidate> hits = engine.search(query, fuzzy);
+                if (!hits.isEmpty() && hits.get(0).text().length() != 1) {
+                    failures.append(query).append(fuzzy ? " fuzzy" : "")
+                            .append(" phrase-first ").append(preview(hits)).append('\n');
+                }
+            }
+        }
+        for (String query : PinyinEngine.incompleteSyllables()) {
+            List<Candidate> hits = engine.search(query, false);
+            if (hits.isEmpty() || hits.get(0).text().length() == 1) continue;
+            boolean characterExists = false;
+            for (Candidate candidate : hits) {
+                if (candidate.text().length() == 1
+                        && PinyinEngine.normalize(candidate.pinyin()).startsWith(query)) {
+                    characterExists = true;
+                    break;
+                }
+            }
+            if (characterExists) {
+                failures.append(query).append(" partial phrase-first ")
+                        .append(preview(hits)).append('\n');
+            }
+        }
+        for (String query : PinyinEngine.syllables()) {
+            List<Candidate> hits = engine.search(query, false);
+            if (hits.isEmpty() || hits.get(0).text().length() == 1) continue;
+            boolean exactChar = false;
+            for (Candidate candidate : hits) {
+                if (candidate.text().length() == 1
+                        && PinyinEngine.normalize(candidate.pinyin()).equals(query)) {
+                    exactChar = true;
+                    break;
+                }
+            }
+            if (exactChar) {
+                failures.append(query).append(" syllable phrase-first ")
+                        .append(preview(hits)).append('\n');
+            }
+        }
+        assertEquals("就", engine.search("jiu", false).get(0).text());
+        assertEquals("其", engine.search("qi", false).get(0).text());
+        assertEquals(failures.toString(), "", failures.toString());
+    }
+
+    private static void assertBefore(List<Candidate> hits, String earlier, String later) {
+        int earlierAt = -1;
+        int laterAt = -1;
+        for (int i = 0; i < hits.size(); i++) {
+            String text = hits.get(i).text();
+            if (text.equals(earlier)) earlierAt = i;
+            if (text.equals(later)) laterAt = i;
+        }
+        assertTrue(earlier + " missing from " + hits.stream().limit(8).map(Candidate::text).toList(),
+                earlierAt >= 0);
+        assertTrue(later + " should follow " + earlier + ", got "
+                        + hits.stream().limit(8).map(Candidate::text).toList(),
+                laterAt < 0 || earlierAt < laterAt);
+    }
+
 }

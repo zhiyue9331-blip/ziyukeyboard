@@ -99,4 +99,140 @@ public class CandidateMergeTest {
                 > builtIn.score() + UserLexiconStore.rankingBonus(builtIn));
         assertEquals(0, UserLexiconStore.rankingBonus(prediction));
     }
+
+    @Test
+    public void abbreviationPrefersExactInitialsOverRimeCompletions() {
+        List<Candidate> javaOrder = List.of(
+                new Candidate("中国", "zhōng guó", 2_500_000, Candidate.Source.PINYIN),
+                new Candidate("这个", "zhè ge", 2_490_000, Candidate.Source.PINYIN),
+                new Candidate("中国人", "zhōng guó rén", 10, Candidate.Source.PINYIN));
+        Candidate china = new Candidate("中国", "zhōng guó", 99_994,
+                Candidate.Source.RIME, "", 2);
+        List<Candidate> merged = List.of(
+                new Candidate("中国人", "zhōng guó rén", 100_000, Candidate.Source.RIME),
+                new Candidate("这个人", "zhè ge rén", 99_999, Candidate.Source.RIME),
+                new Candidate("这个时候", "zhè ge shí hou", 99_998, Candidate.Source.RIME),
+                new Candidate("这个", "zhè ge", 99_997, Candidate.Source.RIME),
+                china);
+
+        List<Candidate> result = HanziInputMethodService.preferExactAbbreviations(
+                "zg", javaOrder, merged);
+
+        assertEquals(List.of("中国", "这个", "中国人", "这个人", "这个时候"),
+                result.stream().map(Candidate::text).toList());
+        assertEquals(Candidate.Source.RIME, result.get(0).source());
+        assertEquals(2, result.get(0).consumedInputLength());
+    }
+
+    @Test
+    public void fullPinyinAndSyllablesDoNotUseAbbreviationOrder() {
+        List<Candidate> merged = List.of(
+                new Candidate("中国人", "zhōng guó rén", 10, Candidate.Source.RIME),
+                new Candidate("中国", "zhōng guó", 9, Candidate.Source.RIME));
+        assertEquals(List.of("中国人", "中国"),
+                HanziInputMethodService.preferExactAbbreviations(
+                        "zhongguo", List.of(), merged).stream().map(Candidate::text).toList());
+
+        List<Candidate> de = List.of(
+                new Candidate("第二", "dì èr", 90, Candidate.Source.RIME),
+                new Candidate("的", "de", 80, Candidate.Source.RIME));
+        assertEquals(List.of("第二", "的"),
+                HanziInputMethodService.preferExactAbbreviations(
+                        "de", List.of(new Candidate("的", "de", 2_000_000, Candidate.Source.PINYIN)),
+                        de).stream().map(Candidate::text).toList());
+    }
+
+    @Test
+    public void partialSyllableFloatsCharactersAboveRimePhrases() {
+        List<Candidate> javaOrder = List.of(
+                new Candidate("是", "shì", 2_600_000, Candidate.Source.PINYIN),
+                new Candidate("说", "shuō", 2_500_000, Candidate.Source.PINYIN),
+                new Candidate("试试", "shì shi", 10, Candidate.Source.PINYIN));
+        Candidate shi = new Candidate("是", "", 99_000, Candidate.Source.RIME, "", 2);
+        List<Candidate> merged = List.of(
+                new Candidate("试试", "shì shi", 100_000, Candidate.Source.RIME),
+                new Candidate("什么", "shén me", 99_900, Candidate.Source.RIME),
+                shi,
+                new Candidate("说", "shuō", 2_500_000, Candidate.Source.PINYIN));
+
+        List<Candidate> result = HanziInputMethodService.preferPartialSyllableChars(
+                "sh", javaOrder, merged);
+
+        assertEquals(List.of("是", "说", "试试", "什么"),
+                result.stream().map(Candidate::text).toList());
+        assertEquals(Candidate.Source.RIME, result.get(0).source());
+    }
+
+    @Test
+    public void bareNFloatsNiAheadOfRimeEnInterjection() {
+        List<Candidate> javaOrder = List.of(
+                new Candidate("你", "nǐ", 2_600_000, Candidate.Source.PINYIN),
+                new Candidate("那", "nà", 2_400_000, Candidate.Source.PINYIN),
+                new Candidate("嗯", "ng", 1_700_000, Candidate.Source.PINYIN));
+        List<Candidate> merged = List.of(
+                new Candidate("嗯", "", 100_000, Candidate.Source.RIME),
+                new Candidate("你", "nǐ", 99_000, Candidate.Source.RIME),
+                new Candidate("那", "nà", 98_500, Candidate.Source.RIME),
+                new Candidate("那个", "nà ge", 98_000, Candidate.Source.RIME));
+
+        List<Candidate> result = HanziInputMethodService.preferPartialSyllableChars(
+                "n", javaOrder, merged);
+
+        assertEquals(List.of("你", "那", "嗯", "那个"),
+                result.stream().map(Candidate::text).toList());
+    }
+
+    @Test
+    public void ngKeepsShortAbbreviationAheadOfRimeCompletion() {
+        List<Candidate> javaOrder = List.of(
+                new Candidate("嗯", "ng", 2_000_000, Candidate.Source.PINYIN),
+                new Candidate("那个", "nà ge", -600_000, Candidate.Source.PINYIN),
+                new Candidate("哪个", "nǎ ge", -610_000, Candidate.Source.PINYIN));
+        List<Candidate> merged = List.of(
+                new Candidate("那个人", "nà gè rén", 100_000, Candidate.Source.RIME),
+                new Candidate("嗯", "ng", 99_000, Candidate.Source.RIME),
+                new Candidate("那个", "nà ge", 98_000, Candidate.Source.RIME));
+
+        List<Candidate> result = HanziInputMethodService.preferNearSyllableInitials(
+                "ng", javaOrder, merged);
+
+        assertEquals(List.of("嗯", "那个", "那个人"),
+                result.stream().map(Candidate::text).toList());
+    }
+
+    @Test
+    public void assemblyExactCodeLeadsTheLongerRimeCompletion() {
+        List<Candidate> exact = List.of(
+                new Candidate("吕", "lǚ", 650, Candidate.Source.ASSEMBLY, "口+口"));
+        Candidate lv = new Candidate("吕", "", 99_000, Candidate.Source.RIME_ASSEMBLY, "", 6);
+        List<Candidate> merged = List.of(
+                new Candidate("品", "pǐn", 100_000, Candidate.Source.RIME_ASSEMBLY, "口+口+口"),
+                new Candidate("哭", "kū", 99_500, Candidate.Source.RIME_ASSEMBLY),
+                lv);
+
+        List<Candidate> result = HanziInputMethodService.preferExactAssembly(exact, merged);
+
+        assertEquals(List.of("吕", "品", "哭"),
+                result.stream().map(Candidate::text).toList());
+        assertEquals(Candidate.Source.RIME_ASSEMBLY, result.get(0).source());
+        assertEquals(6, result.get(0).consumedInputLength());
+    }
+
+    @Test
+    public void buriedSyllableAbbreviationIsNotPromoted() {
+        List<Candidate> javaOrder = new java.util.ArrayList<>();
+        javaOrder.add(new Candidate("的", "de", 3_000_000, Candidate.Source.PINYIN));
+        for (int i = 0; i < 20; i++) {
+            javaOrder.add(new Candidate("词" + i, "de hua", 1000 - i, Candidate.Source.PINYIN));
+        }
+        javaOrder.add(new Candidate("第二", "dì èr", -1_700_000, Candidate.Source.PINYIN));
+        List<Candidate> merged = List.of(
+                new Candidate("的", "de", 3_000_000, Candidate.Source.RIME),
+                new Candidate("得了", "dé le", 50_000, Candidate.Source.RIME),
+                new Candidate("第二", "dì èr", 40_000, Candidate.Source.RIME));
+
+        assertEquals(List.of("的", "得了", "第二"),
+                HanziInputMethodService.preferNearSyllableInitials(
+                        "de", javaOrder, merged).stream().map(Candidate::text).toList());
+    }
 }
