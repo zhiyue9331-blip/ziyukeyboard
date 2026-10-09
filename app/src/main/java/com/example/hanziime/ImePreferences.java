@@ -26,4 +26,9 @@ public final class ImePreferences {
     public static boolean enabled(SharedPreferences preferences, String key) {
         return preferences.getBoolean(key, true);
     }
+
+    public static int personalSkinResource(Context context) {
+        return context.getResources().getIdentifier(
+                "star_bunny_skin", "drawable", context.getPackageName());
+    }
 }

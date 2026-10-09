@@ -26,6 +26,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 
@@ -38,7 +40,28 @@ public final class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(createSetupView());
+        try {
+            setContentView(createSetupView());
+        } catch (Throwable error) {
+            setContentView(createCrashView(error));
+        }
+    }
+
+    /** Shows the full stack so OEM white-screen crashes become readable. */
+    private View createCrashView(Throwable error) {
+        StringWriter buffer = new StringWriter();
+        error.printStackTrace(new PrintWriter(buffer));
+        TextView text = new TextView(this);
+        text.setText("字语输入法启动失败（调试信息）：\n\n" + buffer);
+        text.setTextColor(Color.BLACK);
+        text.setTextSize(13);
+        text.setPadding(dp(16), dp(48), dp(16), dp(16));
+        text.setTextIsSelectable(true);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(Color.WHITE);
+        scroll.addView(text, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+        return scroll;
     }
 
     private View createSetupView() {
@@ -104,6 +127,8 @@ public final class MainActivity extends Activity {
             String next = switch (current) {
                 case "paper" -> "jade";
                 case "jade" -> "night";
+                case "night" -> ImePreferences.personalSkinResource(this) != 0
+                        ? "star_bunny" : "paper";
                 default -> "paper";
             };
             ImePreferences.get(this).edit().putString(ImePreferences.THEME, next).apply();
@@ -331,6 +356,8 @@ public final class MainActivity extends Activity {
         String name = switch (current) {
             case "jade" -> "青玉";
             case "night" -> "夜色";
+            case "star_bunny" -> ImePreferences.personalSkinResource(this) != 0
+                    ? "星愿兔兔" : "纸白";
             case "custom" -> ImePreferences.get(this).getString(
                     ImePreferences.CUSTOM_SKIN_NAME, "自定义");
             default -> "纸白";
@@ -362,6 +389,8 @@ public final class MainActivity extends Activity {
 
     private Button actionButton(int textResource) {
         Button button = new Button(this);
+        // Callers sometimes pass 0 and set the label afterwards. setText(0) throws
+        // Resources.NotFoundException on modern Android (seen on iQOO OriginOS 6).
         if (textResource != 0) {
             button.setText(textResource);
         }
