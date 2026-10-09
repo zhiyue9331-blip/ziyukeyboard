@@ -41,11 +41,22 @@ public class PinyinEngineTest {
     }
 
     @Test
-    public void fuzzyCanonicalHandlesCommonSouthernPairs() {
-        assertEquals(PinyinEngine.fuzzyCanonical("zhang"),
-                PinyinEngine.fuzzyCanonical("zan"));
-        assertEquals(PinyinEngine.fuzzyCanonical("ling"),
-                PinyinEngine.fuzzyCanonical("nin"));
+    public void oneFuzzyChangePerSyllable() {
+        assertTrue(PinyinEngine.fuzzyVariants("can").contains("chan"));
+        assertTrue(PinyinEngine.fuzzyVariants("can").contains("cang"));
+        assertFalse(PinyinEngine.fuzzyVariants("can").contains("chang"));
+        assertTrue(PinyinEngine.fuzzyVariants("zhang").contains("zang"));
+        assertTrue(PinyinEngine.fuzzyVariants("zhang").contains("zhan"));
+        assertFalse(PinyinEngine.fuzzyVariants("zhang").contains("zan"));
+        assertTrue(PinyinEngine.fuzzyVariants("ling").contains("ning"));
+        assertTrue(PinyinEngine.fuzzyVariants("ling").contains("lin"));
+        assertFalse(PinyinEngine.fuzzyVariants("ling").contains("nin"));
+        assertTrue(PinyinEngine.fuzzyVariants("yecan").contains("yechan"));
+        assertTrue(PinyinEngine.fuzzyVariants("yecan").contains("yecang"));
+        assertFalse(PinyinEngine.fuzzyVariants("yecan").contains("yechang"));
+        assertTrue(PinyinEngine.fuzzyVariants("l").isEmpty());
+        assertTrue(PinyinEngine.fuzzyVariants("n").isEmpty());
+        assertTrue(PinyinEngine.fuzzyVariants("fu").contains("hu"));
     }
 
     @Test
@@ -78,25 +89,7 @@ public class PinyinEngineTest {
 
     @Test
     public void singleSyllablePrefersCharacterOverPhrase() throws Exception {
-        // Mimic production: core dict (priority) + full rime table.
-        java.io.StringWriter combined = new java.io.StringWriter();
-        try (java.io.BufferedReader core = new java.io.BufferedReader(new FileReader(asset("pinyin_dictionary.tsv")));
-             java.io.BufferedReader full = new java.io.BufferedReader(new FileReader(asset("pinyin_rime.tsv")))) {
-            String line;
-            while ((line = core.readLine()) != null) {
-                if (line.isBlank() || line.startsWith("#")) continue;
-                String[] fields = line.split("\t");
-                if (fields.length >= 4) {
-                    int freq = Integer.parseInt(fields[3]) + 1_000_000;
-                    combined.write(fields[0] + "\t" + fields[1] + "\t" + fields[2] + "\t" + freq + "\n");
-                }
-            }
-            while ((line = full.readLine()) != null) {
-                combined.write(line);
-                combined.write('\n');
-            }
-        }
-        PinyinEngine engine = new PinyinEngine(new java.io.StringReader(combined.toString()));
+        PinyinEngine engine = productionLikeEngine();
         assertEquals("打", engine.search("da", false).get(0).text());
         assertEquals("很", engine.search("hen", false).get(0).text());
         assertEquals("热", engine.search("re", false).get(0).text());
@@ -125,19 +118,15 @@ public class PinyinEngineTest {
 
     }
 
-    /** Production-like engine: core dict (+1M) + full rime table. */
+    /** Core table at its own weights, then the full table. Same order as production. */
     private static PinyinEngine productionLikeEngine() throws IOException {
         java.io.StringWriter combined = new java.io.StringWriter();
         try (java.io.BufferedReader core = new java.io.BufferedReader(new FileReader(asset("pinyin_dictionary.tsv")));
              java.io.BufferedReader full = new java.io.BufferedReader(new FileReader(asset("pinyin_rime.tsv")))) {
             String line;
             while ((line = core.readLine()) != null) {
-                if (line.isBlank() || line.startsWith("#")) continue;
-                String[] fields = line.split("\t");
-                if (fields.length >= 4) {
-                    int freq = Integer.parseInt(fields[3]) + 1_000_000;
-                    combined.write(fields[0] + "\t" + fields[1] + "\t" + fields[2] + "\t" + freq + "\n");
-                }
+                combined.write(line);
+                combined.write('\n');
             }
             while ((line = full.readLine()) != null) {
                 combined.write(line);
@@ -207,9 +196,11 @@ public class PinyinEngineTest {
         assertEquals("一会儿", engine.search("yi huir", false).get(0).text());
         assertEquals("怎么了", engine.search("zenmejiale", false).get(0).text());
         assertEquals("不喜欢", engine.search("buxihuan", false).get(0).text());
-        assertEquals("试试", engine.search("shishi", false).get(0).text());
+        List<Candidate> shishi = engine.search("shishi", false);
+        assertEquals("实施", shishi.get(0).text());
+        assertBefore(shishi, "实施", "试试");
         assertEquals("吧", engine.search("ba", false).get(0).text());
-        assertEquals("安", engine.search("an", false).get(0).text());
+        assertEquals("按", engine.search("an", false).get(0).text());
 
         // Soft: lone f must not rank multi-char 方便 first
         List<Candidate> fHits = engine.search("f", true);
@@ -251,9 +242,9 @@ public class PinyinEngineTest {
     public void productionAbbreviationPutsChinaFirst() throws IOException {
         PinyinEngine engine = productionLikeEngine();
         List<Candidate> zg = engine.search("zg", false);
-        assertEquals("中国", zg.get(0).text());
-        assertBefore(zg, "中国", "这个");
-        assertBefore(zg, "这个", "中国人");
+        assertEquals("这个", zg.get(0).text());
+        assertBefore(zg, "这个", "中国");
+        assertBefore(zg, "中国", "中国人");
         assertBefore(engine.search("bj", false), "北京", "北京人");
         List<Candidate> nh = engine.search("nh", false);
         assertEquals("你好", nh.get(0).text());
@@ -289,7 +280,7 @@ public class PinyinEngineTest {
         assertBefore(sh, "是", "试试");
         assertBefore(sh, "说", "什么");
         List<Candidate> zh = engine.search("zh", false);
-        assertEquals("这", zh.get(0).text());
+        assertEquals("中", zh.get(0).text());
         assertBefore(zh, "这", "这个");
         assertBefore(zh, "中", "中国");
         List<Candidate> zhon = engine.search("zhon", false);
@@ -336,23 +327,37 @@ public class PinyinEngineTest {
         List<Candidate> fuzzy = engine.search("yecan", true);
         assertEquals("野餐", fuzzy.get(0).text());
         int chang = -1;
+        int canAt = -1;
+        int changChar = -1;
+        List<Candidate> can = engine.search("can", true);
         for (int i = 0; i < fuzzy.size(); i++) {
             if (fuzzy.get(i).text().equals("也常")) chang = i;
         }
-        assertTrue(chang < 0 || chang > 0);
+        for (int i = 0; i < can.size(); i++) {
+            String text = can.get(i).text();
+            if (canAt < 0 && (text.equals("参") || text.equals("餐"))) canAt = i;
+            if (text.equals("常")) changChar = i;
+        }
+        assertTrue("也常 must not lead yecan", chang < 0 || chang > 0);
+        assertTrue("参 or 餐 missing for can", canAt >= 0);
+        assertTrue("常 must not lead 参/餐, at " + changChar + " vs " + canAt,
+                changChar < 0 || canAt < changChar);
+        assertEquals("不知道", engine.search("buzhidao", false).get(0).text());
     }
 
     @Test
     public void commonAbbreviationsLeadWithTheExactWord() throws IOException {
         PinyinEngine engine = productionLikeEngine();
-        assertEquals("中国", engine.search("zg", false).get(0).text());
+        List<Candidate> zg = engine.search("zg", false);
+        assertEquals("这个", zg.get(0).text());
+        assertBefore(zg, "中国", "中国人");
         assertEquals("你好", engine.search("nh", false).get(0).text());
         assertEquals("我们", engine.search("wm", false).get(0).text());
         assertEquals("什么", engine.search("sm", false).get(0).text());
         assertEquals("怎么", engine.search("zm", false).get(0).text());
         assertEquals("今天", engine.search("jt", false).get(0).text());
         assertEquals("为什么", engine.search("wsm", false).get(0).text());
-        assertEquals("中文", engine.search("zw", false).get(0).text());
+        assertEquals("作为", engine.search("zw", false).get(0).text());
         assertEquals("可以", engine.search("ky", false).get(0).text());
         assertEquals("没有", engine.search("my", false).get(0).text());
         assertEquals("现在", engine.search("xz", false).get(0).text());

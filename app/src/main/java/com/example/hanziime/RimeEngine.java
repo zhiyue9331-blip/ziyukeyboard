@@ -16,7 +16,7 @@ import java.util.Map;
 
 /** Thin Java owner for the BSD-licensed librime native decoder. */
 final class RimeEngine implements AutoCloseable {
-    private static final String DATA_VERSION = "6";
+    private static final String DATA_VERSION = "7";
     private final Map<String, Integer> candidateIndexes = new HashMap<>();
     private boolean closed;
 

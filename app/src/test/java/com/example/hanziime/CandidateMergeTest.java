@@ -101,6 +101,19 @@ public class CandidateMergeTest {
     }
 
     @Test
+    public void readingBonusMovesAFewRanksAndStops() {
+        assertEquals(0, UserLexiconStore.readingBonus(0));
+        assertEquals(2, UserLexiconStore.readingBonus(1));
+        assertEquals(6, UserLexiconStore.readingBonus(3));
+        assertEquals(6, UserLexiconStore.readingBonus(40));
+        int exact = 6_000_000;
+        int fuzzy = 500_000;
+        int rimeNeighbor = 100_000;
+        assertTrue(exact > fuzzy + UserLexiconStore.readingBonus(40));
+        assertTrue(rimeNeighbor + UserLexiconStore.readingBonus(1) - rimeNeighbor <= 6);
+    }
+
+    @Test
     public void abbreviationPrefersExactInitialsOverRimeCompletions() {
         List<Candidate> javaOrder = List.of(
                 new Candidate("中国", "zhōng guó", 2_500_000, Candidate.Source.PINYIN),

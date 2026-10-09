@@ -285,7 +285,9 @@ public final class HanziInputMethodService extends InputMethodService
                     composition.toString(), fromJava);
             candidates = mergeCandidates(exactSingles, custom, decoded, fromJava);
         }
-        if (learningAllowed()) candidates = userLexicon.rerank(candidates);
+        if (learningAllowed()) {
+            candidates = userLexicon.rerank(candidates, composition.toString());
+        }
         if (mode == SimpleKeyboardView.InputMode.ASSEMBLY) {
             // Rime weight and learned frequency would keep 品 ahead of 吕.
             candidates = preferExactAssembly(
@@ -561,7 +563,13 @@ public final class HanziInputMethodService extends InputMethodService
                 && rimeEngine != null) {
             rimeEngine.recordSelection(candidate);
         }
-        if (learningAllowed()) userLexicon.record(candidate, previousCommitted);
+        if (learningAllowed()) {
+            String typed = composition.toString();
+            String learnedReading = remaining.isEmpty() || remaining.length() > typed.length()
+                    ? typed
+                    : typed.substring(0, typed.length() - remaining.length());
+            userLexicon.record(candidate, previousCommitted, learnedReading);
+        }
         commitDirect(candidate.text());
         previousCommitted = candidate.text();
         composition.setLength(0);
