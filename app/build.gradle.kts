@@ -2,6 +2,8 @@ plugins {
     id("com.android.application")
 }
 
+val includePersonalSkin = providers.gradleProperty("includePersonalSkin").orNull == "true"
+
 android {
     namespace = "com.example.hanziime"
     compileSdk = 36
@@ -12,6 +14,10 @@ android {
         targetSdk = 36
         versionCode = 21
         versionName = "0.4.14"
+        ndk {
+            // x86_64 is the MuMu image. arm64-v8a stays for phones.
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -23,6 +29,13 @@ android {
             )
         }
     }
+
+    sourceSets {
+        getByName("main") {
+            if (includePersonalSkin) res.srcDir("../skins/personal/res")
+        }
+    }
+
 
     packaging {
         jniLibs {

@@ -1,9 +1,16 @@
 package com.example.hanziime;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ColorFilter;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.Paint;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -50,6 +57,15 @@ public final class SimpleKeyboardView extends LinearLayout {
     /** 0 = off, 1 = next key upper, 2 = caps lock */
     private int shiftState = 0;
     private int symbolPage = 0;
+    private static final int DELETE_REPEAT_DELAY_MS = 350;
+    private static final int DELETE_REPEAT_INTERVAL_MS = 50;
+    private final Runnable repeatDelete = new Runnable() {
+        @Override
+        public void run() {
+            if (listener != null) listener.onDelete();
+            postDelayed(this, DELETE_REPEAT_INTERVAL_MS);
+        }
+    };
 
     public SimpleKeyboardView(Context context) {
         super(context);
@@ -57,7 +73,13 @@ public final class SimpleKeyboardView extends LinearLayout {
         preferences = ImePreferences.get(context);
         setOrientation(VERTICAL);
         setPadding(dp(3), dp(3), dp(3), dp(4));
-        setBackgroundColor(panelColor());
+        int personalSkin = ImePreferences.personalSkinResource(context);
+        if ("star_bunny".equals(preferences.getString(ImePreferences.THEME, "paper"))
+                && personalSkin != 0) {
+            setBackground(new StarBunnyBackground(context, personalSkin));
+        } else {
+            setBackgroundColor(panelColor());
+        }
         compositionView = new TextView(context);
         candidateRow = new LinearLayout(context);
         candidateScroller = new HorizontalScrollView(context);
@@ -124,9 +146,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         });
         inkActions.addView(recognize, weightedKey(2f));
         Button inkDelete = createKey("删除");
-        inkDelete.setOnClickListener(view -> {
-            if (listener != null) listener.onDelete();
-        });
+        bindRepeatingDelete(inkDelete);
         inkActions.addView(inkDelete, weightedKey());
         handwritingArea.addView(inkActions,
                 new LayoutParams(LayoutParams.MATCH_PARENT, dp(44)));
@@ -136,6 +156,7 @@ public final class SimpleKeyboardView extends LinearLayout {
     }
 
     private void rebuildKeyArea() {
+        stopRepeatDelete();
         keyboardArea.removeAllViews();
         String[] rows = switch (mode) {
             case NUMBER -> new String[]{"123", "456", "789", "+-0.="};
@@ -197,9 +218,7 @@ public final class SimpleKeyboardView extends LinearLayout {
             if (letterLayout && rowIndex == 2) {
                 Button delete = createKey("⌫");
                 delete.setTextSize(20);
-                delete.setOnClickListener(view -> {
-                    if (listener != null) listener.onDelete();
-                });
+                bindRepeatingDelete(delete);
                 row.addView(delete, weightedKey(1.18f));
             }
             keyboardArea.addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, dp(43)));
@@ -271,9 +290,7 @@ public final class SimpleKeyboardView extends LinearLayout {
         } else {
             Button delete = createKey("⌫");
             delete.setTextSize(20);
-            delete.setOnClickListener(view -> {
-                if (listener != null) listener.onDelete();
-            });
+            bindRepeatingDelete(delete);
             actions.addView(delete, weightedKey());
         }
 
@@ -383,7 +400,6 @@ public final class SimpleKeyboardView extends LinearLayout {
         return row;
     }
 
-    @SuppressLint("ClickableViewAccessibility")
     private Button createKey(String label) {
         Button key = new Button(getContext());
         key.setText(label);
@@ -396,23 +412,73 @@ public final class SimpleKeyboardView extends LinearLayout {
         background.setCornerRadius(dp(cornerRadius()));
         key.setBackground(background);
         key.setOnTouchListener((view, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                if (ImePreferences.enabled(preferences, ImePreferences.VIBRATION)) {
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-                }
-                if (ImePreferences.enabled(preferences, ImePreferences.SOUND)) {
-                    view.playSoundEffect(SoundEffectConstants.CLICK);
-                }
-            }
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) playKeyFeedback(view);
             return false;
         });
         return key;
+    }
+
+    /** Tap deletes once. Holding repeats until the finger lifts or slides off. */
+    private void bindRepeatingDelete(Button delete) {
+        delete.setOnTouchListener((view, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN -> {
+                    playKeyFeedback(view);
+                    view.setPressed(true);
+                    if (listener != null) listener.onDelete();
+                    removeCallbacks(repeatDelete);
+                    postDelayed(repeatDelete, DELETE_REPEAT_DELAY_MS);
+                    return true;
+                }
+                case MotionEvent.ACTION_MOVE -> {
+                    if (!touchInside(view, event)) {
+                        view.setPressed(false);
+                        stopRepeatDelete();
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    view.setPressed(false);
+                    stopRepeatDelete();
+                    return true;
+                }
+                default -> {
+                    return false;
+                }
+            }
+        });
+    }
+
+    private void stopRepeatDelete() {
+        removeCallbacks(repeatDelete);
+    }
+
+    private void playKeyFeedback(View view) {
+        if (ImePreferences.enabled(preferences, ImePreferences.VIBRATION)) {
+            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+        }
+        if (ImePreferences.enabled(preferences, ImePreferences.SOUND)) {
+            view.playSoundEffect(SoundEffectConstants.CLICK);
+        }
+    }
+
+    private static boolean touchInside(View view, MotionEvent event) {
+        return event.getX() >= 0 && event.getY() >= 0
+                && event.getX() < view.getWidth() && event.getY() < view.getHeight();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        stopRepeatDelete();
+        super.onDetachedFromWindow();
     }
 
     private int keyColor() {
         return switch (preferences.getString(ImePreferences.THEME, "paper")) {
             case "jade" -> Color.rgb(218, 241, 235);
             case "night" -> Color.rgb(184, 198, 209);
+            case "star_bunny" -> ImePreferences.personalSkinResource(getContext()) != 0
+                    ? Color.argb(180, 246, 250, 255) : Color.WHITE;
             case "custom" -> safeColor(ImePreferences.CUSTOM_KEY_COLOR, "#FFFFFF");
             default -> Color.WHITE;
         };
@@ -428,6 +494,10 @@ public final class SimpleKeyboardView extends LinearLayout {
     }
 
     private int accentColor() {
+        if ("star_bunny".equals(preferences.getString(ImePreferences.THEME, "paper"))
+                && ImePreferences.personalSkinResource(getContext()) != 0) {
+            return Color.rgb(30, 70, 108);
+        }
         if ("custom".equals(preferences.getString(ImePreferences.THEME, "paper"))) {
             return safeColor(ImePreferences.CUSTOM_ACCENT_COLOR, "#0F766E");
         }
@@ -471,4 +541,35 @@ public final class SimpleKeyboardView extends LinearLayout {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
+    private static final class StarBunnyBackground extends Drawable {
+        private final Bitmap bitmap;
+        private final Paint paint = new Paint(Paint.FILTER_BITMAP_FLAG);
+
+        StarBunnyBackground(Context context, int resourceId) {
+            bitmap = BitmapFactory.decodeResource(context.getResources(), resourceId);
+        }
+
+        @Override
+        public void draw(Canvas canvas) {
+            Rect bounds = getBounds();
+            float targetRatio = (float) bounds.width() / bounds.height();
+            int sourceWidth = bitmap.getWidth();
+            int sourceHeight = Math.round(sourceWidth / targetRatio);
+            if (sourceHeight > bitmap.getHeight()) {
+                sourceHeight = bitmap.getHeight();
+                sourceWidth = Math.round(sourceHeight * targetRatio);
+            }
+            int left = (bitmap.getWidth() - sourceWidth) / 2;
+            int top = (bitmap.getHeight() - sourceHeight) / 2;
+            canvas.drawBitmap(bitmap,
+                    new Rect(left, top, left + sourceWidth, top + sourceHeight), bounds, paint);
+        }
+
+        @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); invalidateSelf(); }
+        @Override public void setColorFilter(ColorFilter filter) {
+            paint.setColorFilter(filter);
+            invalidateSelf();
+        }
+        @Override public int getOpacity() { return PixelFormat.OPAQUE; }
+    }
 }

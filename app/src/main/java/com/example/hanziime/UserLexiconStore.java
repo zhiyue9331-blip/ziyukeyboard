@@ -11,7 +11,10 @@ import java.util.Map;
 /** Private, on-device candidate frequency and expression model. */
 public final class UserLexiconStore {
     private static final int CUSTOM_ENTRY_PRIORITY = 10_000_000;
-    private static final String FREQUENCY = "frequency.";
+    private static final int READING_BONUS_STEP = 2;
+    private static final int READING_BONUS_CAP = 6;
+    private static final String READING = "reading.";
+    private static final String SEEN = "seen.";
     private static final String PRONUNCIATION = "pronunciation.";
     private static final String BIGRAM = "bigram.";
     private static final String CUSTOM = "custom.";
@@ -21,17 +24,27 @@ public final class UserLexiconStore {
         data = context.getSharedPreferences("user_lexicon", Context.MODE_PRIVATE);
     }
 
-    public List<Candidate> rerank(List<Candidate> candidates) {
+    public List<Candidate> rerank(List<Candidate> candidates, String rawPinyin) {
+        String query = PinyinEngine.normalize(rawPinyin == null ? "" : rawPinyin);
         List<Candidate> sorted = new ArrayList<>(candidates);
-        Collections.sort(sorted, (left, right) -> Integer.compare(
-                learnedScore(right), learnedScore(left)));
+        Collections.sort(sorted, (left, right) -> {
+            int scoreOrder = Integer.compare(
+                    learnedScore(right, query), learnedScore(left, query));
+            if (scoreOrder != 0) return scoreOrder;
+            return Integer.compare(seenCount(right.text()), seenCount(left.text()));
+        });
         return sorted;
     }
 
-    public void record(Candidate candidate, String previousText) {
+    public void record(Candidate candidate, String previousText, String rawPinyin) {
         String text = candidate.text();
+        String query = PinyinEngine.normalize(rawPinyin == null ? "" : rawPinyin);
         SharedPreferences.Editor editor = data.edit();
-        editor.putInt(FREQUENCY + text, data.getInt(FREQUENCY + text, 0) + 1);
+        if (!query.isEmpty()) {
+            String key = READING + query + "." + text;
+            editor.putInt(key, data.getInt(key, 0) + 1);
+        }
+        editor.putInt(SEEN + text, data.getInt(SEEN + text, 0) + 1);
         editor.putString(PRONUNCIATION + text, candidate.pinyin());
         if (previousText != null && !previousText.isEmpty()) {
             String key = BIGRAM + previousText + "." + text;
@@ -82,9 +95,21 @@ public final class UserLexiconStore {
         data.edit().clear().apply();
     }
 
-    private int learnedScore(Candidate candidate) {
-        return candidate.score() + rankingBonus(candidate)
-                + data.getInt(FREQUENCY + candidate.text(), 0) * 250;
+    private int learnedScore(Candidate candidate, String query) {
+        int times = query.isEmpty()
+                ? 0
+                : data.getInt(READING + query + "." + candidate.text(), 0);
+        return candidate.score() + rankingBonus(candidate) + readingBonus(times);
+    }
+
+    private int seenCount(String text) {
+        return data.getInt(SEEN + text, 0);
+    }
+
+    /** A commit on this reading moves a candidate a couple of ranks, not a page. */
+    static int readingBonus(int timesOnThisReading) {
+        if (timesOnThisReading <= 0) return 0;
+        return Math.min(READING_BONUS_CAP, timesOnThisReading * READING_BONUS_STEP);
     }
 
     static int rankingBonus(Candidate candidate) {

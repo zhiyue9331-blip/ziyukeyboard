@@ -36,10 +36,13 @@
                 android:name="android.view.im"
                 android:resource="@xml/input_method" />
         </service>
+
+        <!-- Harmless if ML Kit is not on classpath; strips provider if any leftover merges it. -->
         <provider
             android:name="com.google.mlkit.common.internal.MlKitInitProvider"
             android:authorities="${applicationId}.mlkitinitprovider"
             tools:node="remove" />
+
     </application>
 
 </manifest>

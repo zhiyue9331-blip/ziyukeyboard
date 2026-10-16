@@ -17,6 +17,8 @@ import java.util.Set;
 
 /** Finds a Han character from the spoken names of its visible components. */
 public final class AssemblyEngine {
+    /** Larger than any component-dictionary weight, including the hand-list bonus. */
+    private static final int EXACT_KEY_BONUS = 2_000_000;
     private final Map<String, List<Entry>> prefixIndex = new HashMap<>();
     private final Map<String, Entry> displayEntries = new HashMap<>();
 
@@ -31,6 +33,12 @@ public final class AssemblyEngine {
 
     AssemblyEngine(Reader source) {
         load(source, 0);
+    }
+
+    /** Hand list first, then the generated table, matching the production load order. */
+    AssemblyEngine(Reader handList, Reader fullDictionary) {
+        load(handList, 1_000_000);
+        load(fullDictionary, 0);
     }
 
     private void load(Reader source, int priorityBonus) {
@@ -107,15 +115,45 @@ public final class AssemblyEngine {
         Set<String> seenText = new LinkedHashSet<>();
         for (Entry entry : matches) {
             if (!seenText.add(entry.text)) continue;
-            result.add(new Candidate(entry.text, entry.pinyin, entry.frequency,
-                    Candidate.Source.ASSEMBLY, entry.components));
+            result.add(toCandidate(entry));
             if (result.size() == 256) break;
         }
         return result;
     }
 
+    /**
+     * Characters whose component spelling is exactly the query, highest frequency first.
+     * Longer spellings such as koukoukou are not included.
+     */
+    public List<Candidate> exactMatches(String rawInput) {
+        String query = PinyinEngine.normalize(rawInput);
+        if (query.isEmpty()) return List.of();
+        String prefix = query.substring(0, Math.min(2, query.length()));
+        List<Entry> indexed = prefixIndex.get(prefix);
+        if (indexed == null) return List.of();
+        List<Entry> exact = new ArrayList<>();
+        for (Entry entry : indexed) {
+            if (query.equals(entry.key)) exact.add(entry);
+        }
+        Collections.sort(exact, (left, right) -> Integer.compare(
+                right.frequency, left.frequency));
+        List<Candidate> result = new ArrayList<>();
+        Set<String> seenText = new LinkedHashSet<>();
+        for (Entry entry : exact) {
+            if (!seenText.add(entry.text)) continue;
+            result.add(toCandidate(entry));
+        }
+        return result;
+    }
+
     private static int score(Entry entry, String query) {
-        return entry.frequency + (entry.key.equals(query) ? 10_000 : 0);
+        // Heavier than any dictionary weight, so 口+口 stays above 口+口+口.
+        return entry.frequency + (entry.key.equals(query) ? EXACT_KEY_BONUS : 0);
+    }
+
+    private static Candidate toCandidate(Entry entry) {
+        return new Candidate(entry.text, entry.pinyin, entry.frequency,
+                Candidate.Source.ASSEMBLY, entry.components);
     }
 
     private record Entry(String key, String text, String pinyin,
