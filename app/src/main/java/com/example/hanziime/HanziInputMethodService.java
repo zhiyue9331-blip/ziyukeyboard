@@ -386,7 +386,9 @@ public final class HanziInputMethodService extends InputMethodService
         Map<String, Candidate> mergedByText = new LinkedHashMap<>();
         List<Candidate> mergedExact = new ArrayList<>();
         for (Candidate candidate : merged) {
-            mergedByText.putIfAbsent(candidate.text(), candidate);
+            if (!mergedByText.containsKey(candidate.text())) {
+                mergedByText.put(candidate.text(), candidate);
+            }
             if (query.equals(PinyinEngine.initialsOf(candidate.pinyin()))) {
                 mergedExact.add(candidate);
             }
@@ -454,7 +456,9 @@ public final class HanziInputMethodService extends InputMethodService
         List<Candidate> rest = new ArrayList<>();
         Map<String, Candidate> byText = new LinkedHashMap<>();
         for (Candidate candidate : merged) {
-            byText.putIfAbsent(candidate.text(), candidate);
+            if (!byText.containsKey(candidate.text())) {
+                byText.put(candidate.text(), candidate);
+            }
             String reading = PinyinEngine.normalize(candidate.pinyin());
             if (candidate.text().length() == 1 && reading.equals(query)) {
                 exactSingles.add(candidate);
@@ -484,7 +488,11 @@ public final class HanziInputMethodService extends InputMethodService
     static List<Candidate> preferExactAssembly(List<Candidate> exact, List<Candidate> merged) {
         if (exact.isEmpty()) return merged;
         Map<String, Candidate> byText = new LinkedHashMap<>();
-        for (Candidate candidate : merged) byText.putIfAbsent(candidate.text(), candidate);
+        for (Candidate candidate : merged) {
+            if (!byText.containsKey(candidate.text())) {
+                byText.put(candidate.text(), candidate);
+            }
+        }
         List<Candidate> ordered = new ArrayList<>();
         Set<String> placed = new LinkedHashSet<>();
         for (Candidate candidate : exact) {
@@ -502,7 +510,9 @@ public final class HanziInputMethodService extends InputMethodService
         if (headTexts.isEmpty()) return merged;
         Map<String, Candidate> byText = new LinkedHashMap<>();
         for (Candidate candidate : merged) {
-            byText.putIfAbsent(candidate.text(), candidate);
+            if (!byText.containsKey(candidate.text())) {
+                byText.put(candidate.text(), candidate);
+            }
         }
         List<Candidate> ordered = new ArrayList<>(merged.size());
         Set<String> placed = new LinkedHashSet<>();
